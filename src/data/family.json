@@ -1,0 +1,58 @@
+{
+  "title": "Family",
+  "people": [
+    {
+      "id": "p1",
+      "name": "Ipsilantis",
+      "surname": "Giagkou",
+      "gender": "m",
+      "notes": "",
+      "birthday": "1961-07-01"
+    },
+    {
+      "id": "p2",
+      "name": "Chrystalla",
+      "surname": "Neofytou",
+      "gender": "f",
+      "notes": "",
+      "birthday": "1967-02-28"
+    },
+    {
+      "id": "p5",
+      "name": "Elena",
+      "surname": "Giagkou",
+      "gender": "f",
+      "notes": "",
+      "birthday": "1989-11-05"
+    },
+    {
+      "id": "p7",
+      "name": "Mixalis",
+      "surname": "Giagkou",
+      "gender": "m",
+      "notes": "",
+      "birthday": "1992-11-17"
+    },
+    {
+      "id": "pmuwk4tg8hhl",
+      "name": "Giannis",
+      "surname": "Giagkou",
+      "gender": "m",
+      "notes": "",
+      "birthday": "1996-09-25"
+    }
+  ],
+  "unions": [
+    {
+      "partners": [
+        "p1",
+        "p2"
+      ],
+      "children": [
+        "p5",
+        "p7",
+        "pmuwk4tg8hhl"
+      ]
+    }
+  ]
+}
