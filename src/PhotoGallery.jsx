@@ -71,12 +71,12 @@ export default function PhotoGallery({ personId, admin, uploader, onChanged }) {
       {open !== null && (
         <Lightbox
           photos={photos} index={open} onClose={() => setOpen(null)} onIndex={setOpen}
-          actions={admin && ((p) => (
+          actions={admin ? ((p) => (
             <span className="lb-actions">
               {!p.approved && <button onClick={() => approve(p)}>Approve</button>}
               <button className="danger" onClick={() => remove(p)}>Delete</button>
             </span>
-          ))}
+          )) : undefined}
         />
       )}
     </section>

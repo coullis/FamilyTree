@@ -28,7 +28,7 @@ export default function Lightbox({ photos, index, onClose, onIndex, actions }) {
           {p.uploader} · {new Date(p.created_at).toLocaleDateString()}
           {!p.approved && " · Pending approval"}
         </span>
-        {actions?.(p)}
+        {typeof actions === "function" && actions(p)}
       </div>
       {n > 1 && (
         <>
