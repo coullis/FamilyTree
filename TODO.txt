@@ -1,3 +1,4 @@
 Add Cancel Changes option
 Add push whole tree right from selected and beyond
-Add zoom in / zoom out
+Add zoom in / zoom out with scroll
+Add panning around with drag and drop (no overlapping with moving people drag and drop)
