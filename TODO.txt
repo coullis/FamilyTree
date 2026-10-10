@@ -1,0 +1,3 @@
+Add Cancel Changes option
+Add push whole tree right from selected and beyond
+Add zoom in / zoom out

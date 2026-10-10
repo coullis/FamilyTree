@@ -6,6 +6,20 @@ export const CW = NW + GAP;
 export const RH = 130;
 export const PAD = 40;
 
+export function closestOpenX(nodes, anchorX, maxX) {
+  const candidates = [];
+  for (let x = PAD; x + NW + PAD <= maxX; x += CW) {
+    if (nodes.every((node) =>
+      x + NW + GAP <= node.x || x >= node.x + NW + GAP
+    )) candidates.push(x);
+  }
+  return candidates.length
+    ? candidates.reduce((closest, x) =>
+      Math.abs(x - anchorX) < Math.abs(closest - anchorX) ? x : closest
+    )
+    : anchorX;
+}
+
 export function layoutTree({ people, unions }) {
   const personIndex = new Map(people.map((person, index) => [person.id, index]));
   const parent = new Map(people.map((person) => [person.id, person.id]));
@@ -145,7 +159,7 @@ export function layoutTree({ people, unions }) {
         : PAD + unit.width / 2;
       return { unit, desired: Number.isFinite(unit.layoutX) ? unit.layoutX : desired - unit.width / 2 };
     }).sort((a, b) => a.desired - b.desired || a.unit.order - b.unit.order);
-    let right = PAD;
+    let right = PAD - GAP;
     layer.forEach(({ unit, desired }) => {
       const left = Math.max(PAD, desired, right + GAP);
       unit.center = left + unit.width / 2;

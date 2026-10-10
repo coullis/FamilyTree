@@ -3,6 +3,7 @@ import FamilyTree from "./FamilyTree";
 import SidePanel from "./SidePanel";
 import SearchBar from "./SearchBar";
 import { addRelative, patchPerson, removePerson, updatePerson } from "./familyOps";
+import { CW, PAD, RH, closestOpenX, layoutTree } from "./layout";
 import { deletePersonPhotos } from "./lib/photos";
 
 export default function AdminPage({
@@ -27,7 +28,28 @@ export default function AdminPage({
   const add = (relation, name, surname) => {
     const res = addRelative(data, selected, relation, name, surname);
     if (res.error) return res.error;
-    setData(res.data);
+    const addsParent = relation === "father" || relation === "mother";
+    const addsChild = relation === "son" || relation === "daughter";
+    const hasParents = data.unions.some((union) => union.children.includes(selected));
+    let updatedData = res.data;
+    if (res.newId && (addsChild || (addsParent && !hasParents))) {
+      const layout = layoutTree(data);
+      const selectedNode = layout.nodes.find((node) => node.id === selected);
+      if (selectedNode) {
+        const createsTopRow = addsParent && selectedNode.y === PAD;
+        const targetY = selectedNode.y + (addsParent && !createsTopRow ? -RH : RH);
+        const occupied = createsTopRow ? [] : layout.nodes.filter((node) => node.y === targetY);
+        const maxX = Math.max(layout.width + CW * 4, selectedNode.x + CW * 4);
+        const layoutX = closestOpenX(occupied, selectedNode.x, maxX);
+        updatedData = {
+          ...res.data,
+          people: res.data.people.map((person) =>
+          person.id === res.newId ? { ...person, layoutX } : person
+          ),
+        };
+      }
+    }
+    setData(updatedData);
     return null;
   };
 
@@ -59,12 +81,45 @@ export default function AdminPage({
   };
 
   const remove = () => {
+    const previousLayout = layoutTree(data);
     const res = removePerson(data, selected);
     if (res.error) return window.alert(res.error);
-    if (res.split && !window.confirm(
-      `Removing ${person.name} ${person.surname} will split the remaining family tree into separate groups. Continue?`
-    )) return;
-    setData(res.data);
+    if (res.split) {
+      return window.alert(
+        `Cannot remove ${person.name} ${person.surname} because doing so would split the family tree into separate groups.`
+      );
+    }
+    const previousX = new Map(previousLayout.nodes.map((node) => [node.id, node.x]));
+    const removedPartnerPositions = data.unions
+      .filter((union) => union.partners.includes(selected))
+      .flatMap((union) => union.partners.filter((partnerId) => partnerId !== selected));
+    const orphanedChildren = data.unions
+      .filter((union) => union.partners.includes(selected))
+      .flatMap((union) => union.children || [])
+      .filter((childId) => !res.data.unions.some((union) =>
+        (union.children || []).includes(childId) && union.partners.length > 0
+      ));
+    const preserveX = new Map();
+    removedPartnerPositions.forEach((partnerId) => {
+      const x = previousX.get(partnerId);
+      if (Number.isFinite(x)) preserveX.set(partnerId, x);
+    });
+    orphanedChildren.forEach((childId) => {
+      const ownUnion = res.data.unions.find((union) => union.partners.includes(childId));
+      (ownUnion?.partners || [childId]).forEach((partnerId) => {
+        const x = previousX.get(partnerId);
+        if (Number.isFinite(x)) preserveX.set(partnerId, x);
+      });
+    });
+    const updatedData = preserveX.size
+      ? {
+        ...res.data,
+        people: res.data.people.map((member) =>
+          preserveX.has(member.id) ? { ...member, layoutX: preserveX.get(member.id) } : member
+        ),
+      }
+      : res.data;
+    setData(updatedData);
     onDeleteCommentsFor(selected);
     deletePersonPhotos(selected).then(onPhotosChanged);
     setSelected(null);
