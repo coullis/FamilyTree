@@ -82,20 +82,35 @@ export function updatePerson(data, id, fields) {
 
 export function removePerson(data, id) {
   if (data.people.length === 1) return { error: "You can't remove the last person." };
-  // a single parent with children would leave those children unattached
-  const orphaning = data.unions.find(
-    (u) => u.partners.length === 1 && u.partners[0] === id && (u.children || []).length
-  );
-  if (orphaning) return { error: "Remove this person's children first (or add a partner for them)." };
 
   const unions = data.unions
     .map((u) => ({
       partners: u.partners.filter((p) => p !== id),
       children: (u.children || []).filter((c) => c !== id),
     }))
-    // drop couples that are left with nobody to connect
-    .filter((u) => u.partners.length > 0 && (u.partners.length > 1 || u.children.length > 0));
-  return { data: { ...data, people: data.people.filter((p) => p.id !== id), unions } };
+    .filter((u) => u.partners.length > 0
+      ? u.partners.length > 1 || u.children.length > 0
+      : u.children.length > 1);
+  const people = data.people.filter((p) => p.id !== id);
+  const countComponents = (members, relationships) => {
+    const roots = new Map(members.map((person) => [person.id, person.id]));
+    const find = (personId) => {
+      const root = roots.get(personId);
+      if (root === undefined || root === personId) return root;
+      const representative = find(root);
+      roots.set(personId, representative);
+      return representative;
+    };
+    relationships.forEach((union) => {
+      const connected = [...union.partners, ...(union.children || [])]
+        .filter((personId) => roots.has(personId));
+      connected.slice(1).forEach((personId) => roots.set(find(personId), find(connected[0])));
+    });
+    return new Set([...roots.keys()].map(find)).size;
+  };
+
+  const split = countComponents(people, unions) > countComponents(data.people, data.unions);
+  return { data: { ...data, people, unions }, split };
 }
 
 export function patchPerson(data, id, patch) {

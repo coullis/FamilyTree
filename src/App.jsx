@@ -51,6 +51,8 @@ export default function App() {
   }, [session, view]);
 
   const dirty = !!session && JSON.stringify(data) !== JSON.stringify(saved);
+  const savedPeople = new Set((saved || family).people.map((person) => person.id));
+  const unsavedIds = new Set(data.people.filter((person) => !savedPeople.has(person.id)).map((person) => person.id));
 
   // warn before closing the tab with unsaved admin edits
   useEffect(() => {
@@ -111,6 +113,7 @@ export default function App() {
       <AdminPage data={data} setData={setData} comments={comments}
         dirty={dirty} saving={saving} onSave={saveTree}
         pending={pending} onPhotosChanged={() => fetchPending().then(setPending)}
+        unsavedIds={unsavedIds}
         onDeleteComment={deleteComment} onDeleteCommentsFor={deleteCommentsFor}
         onMainPage={() => setView("main")} onLogout={logout} />
     );

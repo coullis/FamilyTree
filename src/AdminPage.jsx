@@ -7,7 +7,7 @@ import { deletePersonPhotos } from "./lib/photos";
 
 export default function AdminPage({
   data, setData, comments, onDeleteComment, onDeleteCommentsFor, onMainPage, onLogout,
-  dirty, saving, onSave, pending, onPhotosChanged,
+  dirty, saving, onSave, pending, onPhotosChanged, unsavedIds,
 }) {
   const [selected, setSelected] = useState(null);
   const [focus, setFocus] = useState(null);
@@ -40,10 +40,30 @@ export default function AdminPage({
 
   const patch = (fields) => setData(patchPerson(data, selected, fields));
 
+  const reorder = (personId, x) => {
+    setData((current) => {
+      const union = current.unions.find((item) => item.partners.includes(personId));
+      const group = (union?.partners || [personId])
+        .slice()
+        .sort((a, b) => current.people.findIndex((person) => person.id === a)
+          - current.people.findIndex((person) => person.id === b));
+      const firstIndex = Math.min(...group.map((id) => current.people.findIndex((person) => person.id === id)));
+      const offsets = new Map(group.map((id) => [id, current.people.findIndex((person) => person.id === id) - firstIndex]));
+      return {
+        ...current,
+        people: current.people.map((p) =>
+          offsets.has(p.id) ? { ...p, layoutX: Math.max(40, x + offsets.get(p.id) * 208) } : p
+        ),
+      };
+    });
+  };
+
   const remove = () => {
-    if (!window.confirm(`Remove ${person.name} ${person.surname} from the tree?`)) return;
     const res = removePerson(data, selected);
     if (res.error) return window.alert(res.error);
+    if (res.split && !window.confirm(
+      `Removing ${person.name} ${person.surname} will split the remaining family tree into separate groups. Continue?`
+    )) return;
     setData(res.data);
     onDeleteCommentsFor(selected);
     deletePersonPhotos(selected).then(onPhotosChanged);
@@ -66,7 +86,7 @@ export default function AdminPage({
       <header>
         <div>
           <h1>{data.title} <span className="badge-admin">Admin</span></h1>
-          <p>Click a person to edit details, add relatives, read comments or remove them.</p>
+          <p>Drag people along their row to adjust spacing. Click a person to edit details, add relatives, read comments or remove them.</p>
         </div>
         <div className="actions">
           <button onClick={download}>Download JSON</button>
@@ -75,7 +95,8 @@ export default function AdminPage({
         </div>
       </header>
       <div className="main">
-        <FamilyTree data={data} selectedId={selected} onSelect={setSelected} focus={focus} badges={badges} />
+        <FamilyTree data={data} selectedId={selected} onSelect={setSelected} focus={focus} badges={badges}
+          canReorder onReorder={reorder} unsavedIds={unsavedIds} />
         {person && (
           <SidePanel key={person.id} person={person} comments={personComments}
             onClose={() => setSelected(null)} onAdd={add} onUpdate={update}

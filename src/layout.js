@@ -1,91 +1,200 @@
-// Turns { people, unions } into x/y positions and connector lines.
-// Generations run top -> bottom; siblings sit side by side, left -> right.
-export const NW = 168;       // node width
-export const NH = 48;        // node height
-export const CW = NW + 32;   // width of one column (node + gap)
-export const RH = 130;       // distance between generations
+// Generation numbers increase toward ancestors and decrease toward descendants.
+export const NW = 168;
+export const NH = 48;
+export const GAP = 40;
+export const CW = NW + GAP;
+export const RH = 130;
 export const PAD = 40;
 
 export function layoutTree({ people, unions }) {
-  const childIds = new Set(unions.flatMap((u) => u.children || []));
-  const unionOf = (id) => unions.find((u) => u.partners.includes(id));
+  const personIndex = new Map(people.map((person, index) => [person.id, index]));
+  const parent = new Map(people.map((person) => [person.id, person.id]));
 
-  // columns a person (plus spouse and descendants) needs
-  const measure = (id) => {
-    const u = unionOf(id);
-    if (!u) return 1;
-    const kids = (u.children || []).reduce((s, c) => s + measure(c), 0);
-    return Math.max(u.partners.length > 1 ? 2 : 1, kids);
+  const find = (id) => {
+    const root = parent.get(id);
+    if (root === undefined || root === id) return root;
+    const representative = find(root);
+    parent.set(id, representative);
+    return representative;
+  };
+  const join = (ids) => {
+    const members = ids.filter((id) => parent.has(id));
+    if (members.length < 2) return;
+    const representative = find(members[0]);
+    members.slice(1).forEach((id) => parent.set(find(id), representative));
   };
 
-  const pos = {}; // id -> { gen, cx } (cx = centre x in column units)
-  const links = [];
-  const px = (cx) => PAD + cx * CW;          // centre x in pixels
-  const top = (gen) => PAD + gen * RH;       // node top in pixels
+  unions.forEach((union) => join(union.partners));
 
-  const place = (id, gen, left) => {
-    if (pos[id]) return;
-    const u = unionOf(id);
-    if (!u) {
-      pos[id] = { gen, cx: left + 0.5 };
-      return;
-    }
-    const cols = measure(id);
-    const kids = u.children || [];
-    const kidCols = kids.reduce((s, c) => s + measure(c), 0);
-    let x = left + (cols - kidCols) / 2;
-    kids.forEach((c) => {
-      place(c, gen + 1, x);
-      x += measure(c);
+  const groups = new Map();
+  people.forEach((person) => {
+    const representative = find(person.id);
+    if (!groups.has(representative)) groups.set(representative, []);
+    groups.get(representative).push(person.id);
+  });
+
+  const units = [...groups.values()].map((members) => ({
+    members,
+    order: Math.min(...members.map((id) => {
+      const savedOrder = people[personIndex.get(id)].layoutOrder;
+      return Number.isFinite(savedOrder) ? savedOrder : personIndex.get(id);
+    })),
+    width: members.length * NW + (members.length - 1) * GAP,
+    parents: new Set(),
+    children: new Set(),
+    siblings: new Set(),
+    generation: undefined,
+    center: 0,
+    layoutX: members.reduce((x, id) => {
+      const savedX = people[personIndex.get(id)].layoutX;
+      return Number.isFinite(savedX) ? Math.min(x, savedX) : x;
+    }, Infinity),
+  }));
+  const unitFor = new Map();
+  units.forEach((unit) => unit.members.forEach((id) => unitFor.set(id, unit)));
+
+  unions.forEach((union) => {
+    const parentUnits = [...new Set(union.partners.map((id) => unitFor.get(id)).filter(Boolean))];
+    const childUnits = [...new Set((union.children || []).map((id) => unitFor.get(id)).filter(Boolean))];
+    childUnits.forEach((unit) => {
+      childUnits.forEach((sibling) => {
+        if (unit !== sibling) unit.siblings.add(sibling);
+      });
     });
-    const mid = kids.length
-      ? (pos[kids[0]].cx + pos[kids[kids.length - 1]].cx) / 2
-      : left + cols / 2;
-    const [a, b] = u.partners;
-    const cy = top(gen) + NH / 2;
-    if (b) {
-      pos[a] = { gen, cx: mid - 0.5 };
-      pos[b] = { gen, cx: mid + 0.5 };
-      // partner line
-      links.push(`M${px(pos[a].cx) + NW / 2},${cy} H${px(pos[b].cx) - NW / 2}`);
-    } else {
-      pos[a] = { gen, cx: mid }; // single parent
-    }
-    // couple -> children
-    if (kids.length) {
-      const busY = top(gen) + NH + (RH - NH) / 2;
-      const xs = kids.map((c) => px(pos[c].cx));
-      links.push(`M${px(mid)},${b ? cy : top(gen) + NH} V${busY}`);
-      links.push(`M${Math.min(px(mid), ...xs)},${busY} H${Math.max(px(mid), ...xs)}`);
-      xs.forEach((cx) => links.push(`M${cx},${busY} V${top(gen + 1)}`));
+    parentUnits.forEach((parentUnit) => {
+      childUnits.forEach((childUnit) => {
+        if (parentUnit === childUnit) return;
+        parentUnit.children.add(childUnit);
+        childUnit.parents.add(parentUnit);
+      });
+    });
+  });
+
+  const assignGenerations = (start, generation) => {
+    start.generation = generation;
+    const queue = [start];
+    for (let index = 0; index < queue.length; index++) {
+      const unit = queue[index];
+      unit.parents.forEach((relative) => {
+        if (relative.generation === undefined) {
+          relative.generation = unit.generation + 1;
+          queue.push(relative);
+        }
+      });
+      unit.siblings.forEach((relative) => {
+        if (relative.generation === undefined) {
+          relative.generation = unit.generation;
+          queue.push(relative);
+        }
+      });
+      unit.children.forEach((relative) => {
+        if (relative.generation === undefined) {
+          relative.generation = unit.generation - 1;
+          queue.push(relative);
+        }
+      });
     }
   };
 
-  let left = 0;
-  people.forEach((p) => {
-    // spouses who married into the tree are placed next to their partner
-    const marriedIn = unions.some(
-      (u) => u.partners.includes(p.id) && u.partners.some((q) => childIds.has(q))
-    );
-    if (!childIds.has(p.id) && !marriedIn && !pos[p.id]) {
-      place(p.id, 0, left);
-      left += measure(p.id);
-    }
+  const giannis = people.find((person) =>
+    person.name.trim().toLocaleLowerCase() === "giannis"
+    && person.surname.trim().toLocaleLowerCase() === "giagkou"
+  );
+  if (giannis) assignGenerations(unitFor.get(giannis.id), 0);
+  units.slice().sort((a, b) => a.order - b.order).forEach((unit) => {
+    if (unit.generation === undefined) assignGenerations(unit, 0);
+  });
+
+  const generations = [...new Set(units.map((unit) => unit.generation))].sort((a, b) => a - b);
+  const byGeneration = new Map(generations.map((generation) => [
+    generation,
+    units.filter((unit) => unit.generation === generation)
+      .sort((a, b) => a.order - b.order || a.members[0].localeCompare(b.members[0])),
+  ]));
+
+  const targetsFor = (generation) => {
+    const targets = new Map();
+    units.forEach((unit) => {
+      const children = [...unit.children]
+        .filter((child) => child.generation === generation)
+        .sort((a, b) => a.order - b.order);
+      if (!children.length) return;
+
+      const span = children.reduce((width, child) => width + child.width, 0)
+        + (children.length - 1) * GAP;
+      let left = unit.center - span / 2;
+      children.forEach((child) => {
+        const center = left + child.width / 2;
+        const centers = targets.get(child) || [];
+        centers.push(center);
+        targets.set(child, centers);
+        left += child.width + GAP;
+      });
+    });
+    return targets;
+  };
+
+  const minGeneration = generations.length ? Math.min(...generations) : 0;
+  const maxGeneration = generations.length ? Math.max(...generations) : 0;
+  for (let generation = maxGeneration; generation >= minGeneration; generation--) {
+    const targets = targetsFor(generation);
+    const layer = byGeneration.get(generation).map((unit) => {
+      const centers = targets.get(unit) || [];
+      const desired = centers.length
+        ? centers.reduce((sum, center) => sum + center, 0) / centers.length
+        : PAD + unit.width / 2;
+      return { unit, desired: Number.isFinite(unit.layoutX) ? unit.layoutX : desired - unit.width / 2 };
+    }).sort((a, b) => a.desired - b.desired || a.unit.order - b.unit.order);
+    let right = PAD;
+    layer.forEach(({ unit, desired }) => {
+      const left = Math.max(PAD, desired, right + GAP);
+      unit.center = left + unit.width / 2;
+      right = left + unit.width;
+    });
+  }
+
+  const positions = new Map();
+  units.forEach((unit) => {
+    const left = unit.center - unit.width / 2;
+    unit.members.forEach((id, index) => {
+      positions.set(id, {
+        x: left + index * (NW + GAP),
+        y: PAD + (maxGeneration - unit.generation) * RH,
+      });
+    });
   });
 
   const nodes = people
-    .filter((p) => pos[p.id])
-    .map((p) => ({
-      ...p,
-      x: px(pos[p.id].cx) - NW / 2,
-      y: top(pos[p.id].gen),
-    }));
+    .filter((person) => positions.has(person.id))
+    .map((person) => ({ ...person, ...positions.get(person.id) }));
+  const links = [];
 
-  const maxGen = Math.max(...Object.values(pos).map((p) => p.gen));
+  unions.forEach((union) => {
+    const partners = union.partners.map((id) => positions.get(id)).filter(Boolean);
+    const children = (union.children || []).map((id) => positions.get(id)).filter(Boolean);
+    if (!partners.length) return;
+
+    const partnerCenters = partners.map((position) => position.x + NW / 2);
+    const parentY = partners.reduce((sum, position) => sum + position.y, 0) / partners.length;
+    const coupleY = parentY + NH / 2;
+    if (partners.length > 1) {
+      links.push(`M${partnerCenters[0] + NW / 2},${coupleY} H${partnerCenters[partners.length - 1] - NW / 2}`);
+    }
+    if (!children.length) return;
+
+    const childCenters = children.map((position) => position.x + NW / 2);
+    const parentCenter = partnerCenters.reduce((sum, center) => sum + center, 0) / partnerCenters.length;
+    const busY = parentY + NH + (RH - NH) / 2;
+    links.push(`M${parentCenter},${partners.length > 1 ? coupleY : parentY + NH} V${busY}`);
+    links.push(`M${Math.min(parentCenter, ...childCenters)},${busY} H${Math.max(parentCenter, ...childCenters)}`);
+    children.forEach((child) => links.push(`M${child.x + NW / 2},${busY} V${child.y}`));
+  });
+
+  const maxRight = nodes.reduce((right, node) => Math.max(right, node.x + NW), PAD);
   return {
     nodes,
     links,
-    width: PAD * 2 + left * CW - (CW - NW),
-    height: PAD * 2 + maxGen * RH + NH + 60,
+    width: maxRight + PAD,
+    height: PAD * 2 + (maxGeneration - minGeneration) * RH + NH + 60,
   };
 }
