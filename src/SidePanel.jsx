@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { RELATIONS } from "./familyOps";
 import PhotoGallery from "./PhotoGallery";
 
 export default function SidePanel({
@@ -8,7 +7,8 @@ export default function SidePanel({
 }) {
   const [tab, setTab] = useState("details"); // "details" | "add"
   // add-relationship form
-  const [relation, setRelation] = useState("son");
+  const [relativeGender, setRelativeGender] = useState("m");
+  const [relation, setRelation] = useState("parent");
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   // edit-details form
@@ -26,7 +26,13 @@ export default function SidePanel({
 
   const submitAdd = (e) => {
     e.preventDefault();
-    const err = onAdd(relation, name, surname);
+    const relationByType = {
+      parent: relativeGender === "m" ? "father" : "mother",
+      child: relativeGender === "m" ? "son" : "daughter",
+      sibling: relativeGender === "m" ? "brother" : "sister",
+      spouse: relativeGender === "m" ? "husband" : "wife",
+    };
+    const err = onAdd(relationByType[relation], name, surname);
     if (err) return setError(err);
     setName(""); setSurname(""); setError("");
     switchTab("details");
@@ -112,11 +118,36 @@ export default function SidePanel({
       {tab === "add" && (
         <form onSubmit={submitAdd}>
           <h3>Add a relative of {person.name}</h3>
-          <label>This person is {person.name}'s…
-            <select value={relation} onChange={(e) => setRelation(e.target.value)}>
-              {RELATIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </label>
+          <div className="relationship-options">
+            <div className="relationship-row" role="group" aria-label="Relative's gender">
+              {[
+                { value: "m", label: "Male" },
+                { value: "f", label: "Female" },
+              ].map((option) => (
+                <button key={option.value} type="button"
+                  aria-pressed={relativeGender === option.value}
+                  className={relativeGender === option.value ? "choice selected" : "choice"}
+                  onClick={() => setRelativeGender(option.value)}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="relationship-row" role="group" aria-label="Relationship">
+              {[
+                { value: "parent", label: "Parent" },
+                { value: "child", label: "Child" },
+                { value: "sibling", label: "Sibling" },
+                { value: "spouse", label: "Spouse" },
+              ].map((option) => (
+                <button key={option.value} type="button"
+                  aria-pressed={relation === option.value}
+                  className={relation === option.value ? "choice selected" : "choice"}
+                  onClick={() => setRelation(option.value)}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <label>Name
             <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </label>
