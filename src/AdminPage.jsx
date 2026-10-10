@@ -4,7 +4,6 @@ import SidePanel from "./SidePanel";
 import SearchBar from "./SearchBar";
 import { addRelative, patchPerson, removePerson, updatePerson } from "./familyOps";
 import { deletePersonPhotos } from "./lib/photos";
-import family from "./data/family.json";
 
 export default function AdminPage({
   data, setData, comments, onDeleteComment, onDeleteCommentsFor, onMainPage, onLogout,
@@ -34,9 +33,9 @@ export default function AdminPage({
 
   const update = (fields) => {
     const res = updatePerson(data, selected, fields);
-    if (res.error) return res.error;
+    if (res.error) return { error: res.error };
     setData(res.data);
-    return null;
+    return { data: res.data };
   };
 
   const patch = (fields) => setData(patchPerson(data, selected, fields));
@@ -51,11 +50,6 @@ export default function AdminPage({
     setSelected(null);
   };
 
-  const save = async () => {
-    const err = await onSave();
-    if (err) window.alert(err);
-  };
-
   const logout = () => {
     if (!dirty || window.confirm("You have unsaved changes. Log out and discard them?")) onLogout();
   };
@@ -67,13 +61,6 @@ export default function AdminPage({
     URL.revokeObjectURL(url);
   };
 
-  const reset = () => {
-    if (window.confirm("Reset the tree to the original family.json? You'll still need to press Save to publish it.")) {
-      setData(family);
-      setSelected(null);
-    }
-  };
-
   return (
     <div className="app">
       <header>
@@ -82,11 +69,7 @@ export default function AdminPage({
           <p>Click a person to edit details, add relatives, read comments or remove them.</p>
         </div>
         <div className="actions">
-          <button className={dirty ? "save dirty" : "save"} onClick={save} disabled={!dirty || saving}>
-            {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
-          </button>
           <button onClick={download}>Download JSON</button>
-          <button onClick={reset}>Reset</button>
           <button onClick={onMainPage}>Main Page</button>
           <button onClick={logout}>Log out</button>
         </div>
@@ -96,7 +79,8 @@ export default function AdminPage({
         {person && (
           <SidePanel key={person.id} person={person} comments={personComments}
             onClose={() => setSelected(null)} onAdd={add} onUpdate={update}
-            onPatch={patch} onRemove={remove} onDeleteComment={onDeleteComment} onPhotosChanged={onPhotosChanged} />
+            onPatch={patch} onRemove={remove} onDeleteComment={onDeleteComment} onPhotosChanged={onPhotosChanged}
+            dirty={dirty} saving={saving} onSave={onSave} />
         )}
       </div>
       <SearchBar people={data.people} onPick={pick} />

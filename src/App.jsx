@@ -60,14 +60,14 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  const saveTree = async () => {
+  const saveTree = async (tree = data) => {
     if (loadError)
       return "The saved tree couldn't be loaded, so saving is turned off to protect it. Reload the page and try again.";
     setSaving(true);
-    const { error } = await supabase.from("family").upsert({ id: 1, data, updated_at: new Date().toISOString() });
+    const { error } = await supabase.from("family").upsert({ id: 1, data: tree, updated_at: new Date().toISOString() });
     setSaving(false);
     if (error) return "Couldn't save the tree. Please try again.";
-    setSaved(data);
+    setSaved(tree);
     return null;
   };
 

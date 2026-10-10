@@ -2,7 +2,10 @@ import { useState } from "react";
 import { RELATIONS } from "./familyOps";
 import PhotoGallery from "./PhotoGallery";
 
-export default function SidePanel({ person, onClose, onAdd, onUpdate, onPatch, onRemove, comments, onDeleteComment, onPhotosChanged }) {
+export default function SidePanel({
+  person, onClose, onAdd, onUpdate, onPatch, onRemove, comments, onDeleteComment, onPhotosChanged,
+  dirty, saving, onSave,
+}) {
   const [tab, setTab] = useState("details"); // "details" | "add"
   // add-relationship form
   const [relation, setRelation] = useState("son");
@@ -17,6 +20,9 @@ export default function SidePanel({ person, onClose, onAdd, onUpdate, onPatch, o
   const [saved, setSaved] = useState(false);
 
   const switchTab = (t) => { setTab(t); setError(""); setSaved(false); };
+  const editChanged = edit.name !== person.name || edit.surname !== person.surname
+    || edit.birthday !== (person.birthday || "") || edit.gender !== person.gender
+    || edit.notes !== (person.notes || "");
 
   const submitAdd = (e) => {
     e.preventDefault();
@@ -26,11 +32,21 @@ export default function SidePanel({ person, onClose, onAdd, onUpdate, onPatch, o
     switchTab("details");
   };
 
-  const submitEdit = (e) => {
-    e.preventDefault();
-    const err = onUpdate(edit);
+  const saveChanges = async () => {
+    const result = onUpdate(edit);
+    if (result.error) {
+      setError(result.error);
+      setSaved(false);
+      return;
+    }
+    const err = await onSave(result.data);
     setError(err || "");
     setSaved(!err);
+  };
+
+  const submitEdit = (e) => {
+    e.preventDefault();
+    saveChanges();
   };
 
   const change = (field) => (e) => {
@@ -68,7 +84,7 @@ export default function SidePanel({ person, onClose, onAdd, onUpdate, onPatch, o
 
       {tab === "details" && (
         <>
-          <form className="edit" onSubmit={submitEdit}>
+          <form id="person-edit" className="edit" onSubmit={submitEdit}>
             <label>Name
               <input value={edit.name} onChange={change("name")} />
             </label>
@@ -88,9 +104,6 @@ export default function SidePanel({ person, onClose, onAdd, onUpdate, onPatch, o
               <textarea value={edit.notes} onChange={change("notes")}
                 placeholder="Write something about this person…" />
             </label>
-            {error && <p className="error">{error}</p>}
-            {saved && <p className="saved">Saved</p>}
-            <button className="primary" type="submit">Save changes</button>
           </form>
           <PhotoGallery personId={person.id} admin uploader="Admin" onChanged={onPhotosChanged} />
         </>
@@ -110,7 +123,6 @@ export default function SidePanel({ person, onClose, onAdd, onUpdate, onPatch, o
           <label>Surname
             <input value={surname} onChange={(e) => setSurname(e.target.value)} />
           </label>
-          {error && <p className="error">{error}</p>}
           <button className="primary" type="submit">Add to tree</button>
         </form>
       )}
@@ -132,6 +144,14 @@ export default function SidePanel({ person, onClose, onAdd, onUpdate, onPatch, o
         </div>
       )}
 
+      {error && <p className="error">{error}</p>}
+      {saved && <p className="saved">Saved</p>}
+      <button className="primary" type={tab === "details" ? "submit" : "button"}
+        form={tab === "details" ? "person-edit" : undefined}
+        onClick={tab === "details" ? undefined : saveChanges}
+        disabled={saving || (!dirty && !editChanged)}>
+        {saving ? "Saving…" : "Save changes"}
+      </button>
       <button className="remove" onClick={onRemove}>Remove {person.name} from the tree</button>
     </aside>
   );
