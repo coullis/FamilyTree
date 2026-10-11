@@ -13,13 +13,35 @@ export default function AdminPage({
   const [selected, setSelected] = useState(null);
   const [focus, setFocus] = useState(null);
   const [zoom, setZoom] = useState(1);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const person = data.people.find((p) => p.id === selected);
   const personComments = comments.filter((c) => c.personId === selected);
-  // items waiting for review: comments + unapproved photos
-  const badges = {};
-  comments.forEach((c) => { badges[c.personId] = (badges[c.personId] || 0) + 1; });
-  pending.forEach((p) => { badges[p.person_id] = (badges[p.person_id] || 0) + 1; });
+  const notificationCounts = new Map();
+  comments.forEach((comment) => {
+    const counts = notificationCounts.get(comment.personId) || { comments: 0, photos: 0 };
+    counts.comments += 1;
+    notificationCounts.set(comment.personId, counts);
+  });
+  pending.forEach((photo) => {
+    const counts = notificationCounts.get(photo.person_id) || { comments: 0, photos: 0 };
+    counts.photos += 1;
+    notificationCounts.set(photo.person_id, counts);
+  });
+  const notifications = data.people
+    .map((member) => ({
+      ...member,
+      ...(notificationCounts.get(member.id) || { comments: 0, photos: 0 }),
+    }))
+    .filter((member) => member.comments + member.photos > 0);
+  const notificationTotal = notifications.reduce(
+    (total, member) => total + member.comments + member.photos,
+    0,
+  );
+  const badges = Object.fromEntries(notifications.map((member) => [
+    member.id,
+    member.comments + member.photos,
+  ]));
 
   const pick = (id) => {
     setSelected(id);
@@ -205,6 +227,49 @@ export default function AdminPage({
             dirty={dirty} saving={saving} onSave={onSave} onPushTree={pushTree} />
         )}
       </div>
+      {notificationsOpen && (
+        <aside id="notification-list" className="notification-list" aria-label="People with notifications">
+            <div className="notification-list-header">
+              <h2>Notifications</h2>
+              <button type="button" className="notification-close" onClick={() => setNotificationsOpen(false)}
+                aria-label="Close notifications">×</button>
+            </div>
+            {notifications.length ? (
+              <ul>
+                {notifications.map((member) => (
+                  <li key={member.id}>
+                    <button type="button" className="notification-person" onClick={() => {
+                      pick(member.id);
+                      setNotificationsOpen(false);
+                    }}>
+                      <span className={`dot ${member.gender === "m" ? "male" : "female"}`} />
+                      <span className="notification-person-details">
+                        <strong>{member.name} {member.surname}</strong>
+                        <small>
+                          {[
+                            member.comments ? `${member.comments} comment${member.comments === 1 ? "" : "s"}` : "",
+                            member.photos ? `${member.photos} photo${member.photos === 1 ? "" : "s"}` : "",
+                          ].filter(Boolean).join(" · ")}
+                        </small>
+                      </span>
+                      <span className="notification-count">{member.comments + member.photos}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="notification-empty">No notifications to review.</p>
+            )}
+        </aside>
+      )}
+      <button type="button" className="notifications-toggle" aria-expanded={notificationsOpen}
+        aria-controls="notification-list" aria-label={`Notifications: ${notificationTotal}`}
+        title="Notifications" onClick={() => setNotificationsOpen((open) => !open)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+        </svg>
+        <span className="notifications-total">{notificationTotal}</span>
+      </button>
       <SearchBar people={data.people} onPick={pick} />
     </div>
   );

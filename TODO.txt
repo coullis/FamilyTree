@@ -1,2 +1,2 @@
 Add Cancel Changes option
-Add notifications panel
+Hide non blood related people
