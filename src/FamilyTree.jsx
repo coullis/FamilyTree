@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { layoutTree, NW, NH, GAP, CW, PAD } from "./layout";
 
+function getPinchState(pointers) {
+  const [first, second] = [...pointers.values()];
+  const deltaX = second.x - first.x;
+  const deltaY = second.y - first.y;
+  return {
+    distance: Math.hypot(deltaX, deltaY),
+    centerX: (first.x + second.x) / 2,
+    centerY: (first.y + second.y) / 2,
+  };
+}
+
 export default function FamilyTree({
   data, selectedId, onSelect, focus, badges, canReorder = false, unsavedIds, onReorder,
   zoom, onZoomChange,
@@ -9,6 +20,8 @@ export default function FamilyTree({
   const canvas = useRef(null);
   const drag = useRef(null);
   const pan = useRef(null);
+  const pointers = useRef(new Map());
+  const pinch = useRef(null);
   const zoomRef = useRef(1);
   const zoomAnchor = useRef(null);
   const zoomToRef = useRef(null);
@@ -69,9 +82,10 @@ export default function FamilyTree({
     });
   }, [canReorder, canvasWidth, nodes]);
 
-  // Wheel zooms toward the pointer; dragging the canvas pans in both directions.
+  // Wheel zooms toward the pointer; touch gestures pan with one finger and pinch with two.
   useEffect(() => {
     const el = scroller.current;
+    const activePointers = pointers.current;
     const onWheel = (e) => {
       if (!e.deltaY) return;
       e.preventDefault();
@@ -81,47 +95,97 @@ export default function FamilyTree({
         e.clientY,
       );
     };
-    const onDown = (e) => {
-      if (e.button !== 0) return;
-      if (pan.current) {
-        pan.current.active = false;
-        pan.current.moved = false;
+    const onDown = (event) => {
+      if (event.button !== 0 && event.pointerType !== "touch") return;
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (activePointers.size > 1) {
+        pinch.current = getPinchState(activePointers);
+        drag.current = null;
+        setDragging(null);
+        pan.current = { active: false, moved: true };
+        event.preventDefault();
+        return;
       }
-      if (canReorder && e.target.closest(".person")) return;
+      if (canReorder && event.target.closest(".person")) return;
       pan.current = {
-        x: e.clientX,
-        y: e.clientY,
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
         left: el.scrollLeft,
         top: el.scrollTop,
         moved: false,
         active: true,
       };
     };
-    const onMove = (e) => {
+    const onMove = (event) => {
+      const point = activePointers.get(event.pointerId);
+      if (!point) return;
+      point.x = event.clientX;
+      point.y = event.clientY;
+
+      if (activePointers.size > 1) {
+        const next = getPinchState(activePointers);
+        const previous = pinch.current;
+        if (!previous) {
+          pinch.current = next;
+          return;
+        }
+        el.scrollLeft -= next.centerX - previous.centerX;
+        el.scrollTop -= next.centerY - previous.centerY;
+        if (previous.distance > 0) {
+          zoomToRef.current(
+            zoomRef.current * next.distance / previous.distance,
+            next.centerX,
+            next.centerY,
+          );
+        }
+        pinch.current = next;
+        event.preventDefault();
+        return;
+      }
+
       const active = pan.current;
-      if (!active?.active) return;
-      if (Math.abs(e.clientX - active.x) + Math.abs(e.clientY - active.y) > 3) {
+      if (!active?.active || active.pointerId !== event.pointerId) return;
+      if (Math.abs(event.clientX - active.x) + Math.abs(event.clientY - active.y) > 3) {
         active.moved = true;
       }
       if (!active.moved) return;
-      e.preventDefault();
-      el.scrollLeft = active.left - (e.clientX - active.x);
-      el.scrollTop = active.top - (e.clientY - active.y);
+      event.preventDefault();
+      el.scrollLeft = active.left - (event.clientX - active.x);
+      el.scrollTop = active.top - (event.clientY - active.y);
     };
-    const onUp = () => {
-      if (pan.current) pan.current.active = false;
+    const onUp = (event) => {
+      activePointers.delete(event.pointerId);
+      if (activePointers.size < 2) pinch.current = null;
+      if (pan.current?.pointerId === event.pointerId && pan.current) {
+        pan.current.active = false;
+      }
+      if (activePointers.size === 1 && pan.current?.moved) {
+        const [pointerId, point] = activePointers.entries().next().value;
+        pan.current = {
+          pointerId,
+          x: point.x,
+          y: point.y,
+          left: el.scrollLeft,
+          top: el.scrollTop,
+          moved: true,
+          active: true,
+        };
+      }
     };
     el.addEventListener("wheel", onWheel, { passive: false });
-    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointerdown", onDown, true);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
     return () => {
       el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointerdown", onDown, true);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      activePointers.clear();
+      pinch.current = null;
     };
   }, [canReorder]);
 
@@ -129,13 +193,14 @@ export default function FamilyTree({
     const onMove = (event) => {
       const active = drag.current;
       const surface = canvas.current;
-      if (!active || !surface) return;
+      if (!active || !surface || active.pointerId !== event.pointerId) return;
       active.x = Math.max(0, (event.clientX - surface.getBoundingClientRect().left) / zoomRef.current - active.offsetX);
       if (Math.abs(active.x - active.startX) > 4) active.moved = true;
       if (active.moved) setDragging({ id: active.id, x: active.x });
     };
-    const onUp = () => {
+    const onUp = (event) => {
       const active = drag.current;
+      if (!active || active.pointerId !== event.pointerId) return;
       drag.current = null;
       setDragging(null);
       if (!active?.moved || !onReorder) return;
@@ -175,6 +240,7 @@ export default function FamilyTree({
     const canvasLeft = canvas.current.getBoundingClientRect().left;
     drag.current = {
       id: node.id,
+      pointerId: event.pointerId,
       startX: node.x,
       offsetX: (event.clientX - canvasLeft) / zoomRef.current - node.x,
       x: node.x,

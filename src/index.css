@@ -54,8 +54,11 @@ header p {
   position: relative;
   flex: 1;
   overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: none;
   cursor: grab;
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .scroller:active {
@@ -1128,5 +1131,46 @@ form textarea {
 @media (prefers-reduced-motion: reduce) {
   .thumb img {
     transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  header {
+    padding: 16px 16px 0;
+    align-items: center;
+  }
+
+  header p {
+    font-size: .78rem;
+  }
+
+  header .actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  header .actions > button {
+    padding: 7px 9px;
+    font-size: .78rem;
+  }
+
+  .actions .zoom-controls {
+    gap: 0;
+  }
+
+  .panel {
+    width: min(360px, 86vw);
+    padding: 24px 16px;
+  }
+
+  .search {
+    width: min(240px, calc(100vw - 104px));
+    height: 52px;
+    bottom: 20px;
+  }
+
+  .notifications-toggle {
+    left: 16px;
+    bottom: 20px;
   }
 }
