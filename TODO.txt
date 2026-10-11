@@ -1,3 +1,2 @@
 Add Cancel Changes option
-Adjust layout for twins
-Adjust layout for divorced couples
+Add notifications panel

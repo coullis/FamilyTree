@@ -114,7 +114,7 @@ export default function SidePanel({
                   ].map((option) => (
                     <button key={option.value} type="button"
                       aria-pressed={edit.gender === option.value}
-                      className={edit.gender === option.value ? "choice selected" : "choice"}
+                      className={`choice gender-choice ${option.value === "m" ? "male-choice" : "female-choice"} ${edit.gender === option.value ? "selected" : ""}`}
                       onClick={() => {
                         setEdit({ ...edit, gender: option.value });
                         setSaved(false);
@@ -145,7 +145,7 @@ export default function SidePanel({
               ].map((option) => (
                 <button key={option.value} type="button"
                   aria-pressed={relativeGender === option.value}
-                  className={relativeGender === option.value ? "choice selected" : "choice"}
+                  className={`choice gender-choice ${option.value === "m" ? "male-choice" : "female-choice"} ${relativeGender === option.value ? "selected" : ""}`}
                   onClick={() => setRelativeGender(option.value)}>
                   {option.label}
                 </button>
@@ -158,7 +158,7 @@ export default function SidePanel({
               ].map((option) => (
                 <button key={option.value} type="button"
                   aria-pressed={relation === option.value}
-                  className={relation === option.value ? "choice selected" : "choice"}
+                  className={`choice relationship-choice relation-${option.value} ${relation === option.value ? "selected" : ""}`}
                   onClick={() => setRelation(option.value)}>
                   {option.label}
                 </button>
@@ -173,7 +173,7 @@ export default function SidePanel({
               ].map((option) => (
                 <button key={option.value} type="button"
                   aria-pressed={relation === option.value}
-                  className={relation === option.value ? "choice selected" : "choice"}
+                  className={`choice relationship-choice relation-${option.value} ${relation === option.value ? "selected" : ""}`}
                   onClick={() => setRelation(option.value)}>
                   {option.label}
                 </button>
@@ -209,7 +209,7 @@ export default function SidePanel({
 
       {error && <p className="error">{error}</p>}
       {saved && <p className="saved">Saved</p>}
-      {onPushTree && (
+      {tab === "details" && onPushTree && (
         <button className="primary push-tree" type="button" onClick={onPushTree}>
           Push tree
         </button>
