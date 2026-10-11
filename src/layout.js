@@ -48,7 +48,18 @@ export function layoutTree({ people, unions }) {
   });
 
   const units = [...groups.values()].map((members) => ({
-    members,
+    members: (() => {
+      const ordered = members.slice();
+      unions.forEach((union) => {
+        const partnerOrder = (union.partnerOrder || []).filter((id) => ordered.includes(id));
+        if (partnerOrder.length < 2) return;
+        const slots = ordered
+          .map((id, index) => partnerOrder.includes(id) ? index : -1)
+          .filter((index) => index >= 0);
+        partnerOrder.forEach((id, index) => { ordered[slots[index]] = id; });
+      });
+      return ordered;
+    })(),
     order: Math.min(...members.map((id) => {
       const savedOrder = people[personIndex.get(id)].layoutOrder;
       return Number.isFinite(savedOrder) ? savedOrder : personIndex.get(id);

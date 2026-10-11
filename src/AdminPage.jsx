@@ -85,6 +85,28 @@ export default function AdminPage({
 
   const patch = (fields) => setData(patchPerson(data, selected, fields));
 
+  const swapPartners = (firstId, secondId) => {
+    const unionIndex = data.unions.findIndex((item) =>
+      item.partners.includes(firstId) && item.partners.includes(secondId)
+    );
+    if (unionIndex < 0) return;
+    const layout = layoutTree(data);
+    const positions = new Map(layout.nodes.map((node) => [node.id, node.x]));
+    const partnerOrder = data.unions[unionIndex].partners
+      .slice()
+      .sort((a, b) => positions.get(a) - positions.get(b));
+    const firstIndex = partnerOrder.indexOf(firstId);
+    const secondIndex = partnerOrder.indexOf(secondId);
+    [partnerOrder[firstIndex], partnerOrder[secondIndex]] =
+      [partnerOrder[secondIndex], partnerOrder[firstIndex]];
+    setData((current) => ({
+      ...current,
+      unions: current.unions.map((union, index) =>
+        index === unionIndex ? { ...union, partnerOrder } : union
+      ),
+    }));
+  };
+
   const reorder = (personId, x) => {
     setData((current) => {
       const union = current.unions.find((item) => item.partners.includes(personId));
@@ -219,7 +241,8 @@ export default function AdminPage({
       </header>
       <div className="main">
         <FamilyTree data={data} selectedId={selected} onSelect={setSelected} focus={focus} badges={badges}
-          canReorder onReorder={reorder} unsavedIds={unsavedIds} zoom={zoom} onZoomChange={setZoom} />
+          canReorder onReorder={reorder} onSwapPartners={swapPartners}
+          unsavedIds={unsavedIds} zoom={zoom} onZoomChange={setZoom} />
         {person && (
           <SidePanel key={person.id} person={person} comments={personComments}
             onClose={() => setSelected(null)} onAdd={add} onUpdate={update}

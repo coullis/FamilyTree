@@ -14,7 +14,7 @@ function getPinchState(pointers) {
 
 export default function FamilyTree({
   data, selectedId, onSelect, focus, badges, canReorder = false, unsavedIds, onReorder,
-  zoom, onZoomChange,
+  onSwapPartners, zoom, onZoomChange,
 }) {
   const scroller = useRef(null);
   const canvas = useRef(null);
@@ -207,6 +207,23 @@ export default function FamilyTree({
 
       const dragged = nodes.find((node) => node.id === active.id);
       if (!dragged) return;
+      const surface = canvas.current;
+      if (!surface) return;
+      const bounds = surface.getBoundingClientRect();
+      const dropX = (event.clientX - bounds.left) / zoomRef.current;
+      const dropY = (event.clientY - bounds.top) / zoomRef.current;
+      const targetNode = nodes.find((node) =>
+        node.id !== active.id
+        && dropX >= node.x && dropX <= node.x + NW
+        && dropY >= node.y && dropY <= node.y + NH
+      );
+      const couple = data.unions.find((union) =>
+        union.partners.includes(active.id) && union.partners.includes(targetNode?.id)
+      );
+      if (targetNode && couple && onSwapPartners) {
+        onSwapPartners(active.id, targetNode.id);
+        return;
+      }
       const partners = data.unions.find((union) => union.partners.includes(active.id))?.partners || [active.id];
       const groupNodes = nodes.filter((node) => partners.includes(node.id));
       const groupLeft = Math.min(...groupNodes.map((node) => node.x));
@@ -232,7 +249,7 @@ export default function FamilyTree({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [canvasWidth, data.unions, nodes, onReorder]);
+  }, [canvasWidth, data.unions, nodes, onReorder, onSwapPartners]);
 
   const startDrag = (event, node) => {
     if (!canReorder || event.button !== 0 || !canvas.current) return;
@@ -283,6 +300,7 @@ export default function FamilyTree({
           {nodes.map((n) => (
             <button
               key={n.id}
+              data-person-id={n.id}
               className={`person ${n.gender === "m" ? "male" : "female"} ${selectedId === n.id ? "selected" : ""} ${unsavedIds?.has(n.id) ? "unsaved" : ""} ${dragging?.id === n.id ? "dragging" : ""}`}
               style={{ left: dragging?.id === n.id ? dragging.x : n.x, top: n.y, width: NW, height: NH }}
               onPointerDown={(event) => startDrag(event, n)}
