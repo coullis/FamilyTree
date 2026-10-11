@@ -388,6 +388,17 @@ form textarea:focus {
   cursor: pointer;
 }
 
+.push-tree-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.push-tree-actions .primary {
+  flex: 1;
+  margin-top: 0;
+}
+
 .error {
   color: var(--female);
   font-size: .85rem;

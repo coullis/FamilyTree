@@ -3,8 +3,61 @@ import FamilyTree, { ZoomControls } from "./FamilyTree";
 import SidePanel from "./SidePanel";
 import SearchBar from "./SearchBar";
 import { addRelative, patchPerson, removePerson, updatePerson } from "./familyOps";
-import { CW, PAD, RH, closestOpenX, layoutTree } from "./layout";
+import { CW, GAP, NW, PAD, RH, closestOpenX, layoutTree } from "./layout";
 import { deletePersonPhotos } from "./lib/photos";
+
+function pushTreeColumn(data, selected, direction) {
+  const layout = layoutTree(data);
+  const selectedNode = layout.nodes.find((node) => node.id === selected);
+  if (!selectedNode) return null;
+
+  const selectedColumn = Math.round((selectedNode.x - PAD) / CW);
+  const parent = new Map(data.people.map((member) => [member.id, member.id]));
+  const find = (id) => {
+    const root = parent.get(id);
+    if (root === undefined || root === id) return root;
+    const representative = find(root);
+    parent.set(id, representative);
+    return representative;
+  };
+  data.unions.forEach((union) => {
+    const partners = union.partners.filter((id) => parent.has(id));
+    partners.slice(1).forEach((id) => parent.set(find(id), find(partners[0])));
+  });
+
+  const groupLeft = new Map();
+  layout.nodes.forEach((node) => {
+    const root = find(node.id);
+    groupLeft.set(root, Math.min(groupLeft.get(root) ?? Infinity, node.x));
+  });
+  const shiftedGroups = new Set(
+    [...groupLeft]
+      .filter(([, x]) => Math.round((x - PAD) / CW) > selectedColumn)
+      .map(([root]) => root)
+  );
+  if (!shiftedGroups.size) return null;
+
+  const shiftedNodes = layout.nodes.filter((node) => shiftedGroups.has(find(node.id)));
+  const stationaryNodes = layout.nodes.filter((node) => !shiftedGroups.has(find(node.id)));
+  if (direction < 0 && shiftedNodes.some((node) => stationaryNodes.some((stationary) => {
+    if (node.y !== stationary.y) return false;
+    const left = node.x - CW;
+    return !(left + NW + GAP <= stationary.x || left >= stationary.x + NW + GAP);
+  }))) return null;
+
+  const nodeById = new Map(layout.nodes.map((node) => [node.id, node]));
+  return {
+    ...data,
+    people: data.people.map((member) => {
+      const node = nodeById.get(member.id);
+      if (!node) return member;
+      return {
+        ...member,
+        layoutX: node.x + (shiftedGroups.has(find(member.id)) ? direction * CW : 0),
+      };
+    }),
+  };
+}
 
 export default function AdminPage({
   data, setData, comments, onDeleteComment, onDeleteCommentsFor, onMainPage, onLogout,
@@ -42,6 +95,7 @@ export default function AdminPage({
     member.id,
     member.comments + member.photos,
   ]));
+  const canPushLeft = !!pushTreeColumn(data, selected, -1);
 
   const pick = (id) => {
     setSelected(id);
@@ -125,48 +179,14 @@ export default function AdminPage({
     });
   };
 
-  const pushTree = () => {
-    const layout = layoutTree(data);
-    const selectedNode = layout.nodes.find((node) => node.id === selected);
-    if (!selectedNode) return;
+  const pushRight = () => {
+    const next = pushTreeColumn(data, selected, 1);
+    if (next) setData(next);
+  };
 
-    const selectedColumn = Math.round((selectedNode.x - PAD) / CW);
-    const nodeX = new Map(layout.nodes.map((node) => [node.id, node.x]));
-    const parent = new Map(data.people.map((member) => [member.id, member.id]));
-    const find = (id) => {
-      const root = parent.get(id);
-      if (root === undefined || root === id) return root;
-      const representative = find(root);
-      parent.set(id, representative);
-      return representative;
-    };
-    data.unions.forEach((union) => {
-      const partners = union.partners.filter((id) => parent.has(id));
-      partners.slice(1).forEach((id) => parent.set(find(id), find(partners[0])));
-    });
-
-    const groupLeft = new Map();
-    layout.nodes.forEach((node) => {
-      const root = find(node.id);
-      groupLeft.set(root, Math.min(groupLeft.get(root) ?? Infinity, node.x));
-    });
-    const shiftedGroups = new Set(
-      [...groupLeft]
-        .filter(([, x]) => Math.round((x - PAD) / CW) > selectedColumn)
-        .map(([root]) => root)
-    );
-
-    setData((current) => ({
-      ...current,
-      people: current.people.map((member) => {
-        const x = nodeX.get(member.id);
-        if (!Number.isFinite(x)) return member;
-        return {
-          ...member,
-          layoutX: x + (shiftedGroups.has(find(member.id)) ? CW : 0),
-        };
-      }),
-    }));
+  const pushLeft = () => {
+    const next = pushTreeColumn(data, selected, -1);
+    if (next) setData(next);
   };
 
   const remove = () => {
@@ -247,7 +267,8 @@ export default function AdminPage({
           <SidePanel key={person.id} person={person} comments={personComments}
             onClose={() => setSelected(null)} onAdd={add} onUpdate={update}
             onPatch={patch} onRemove={remove} onDeleteComment={onDeleteComment} onPhotosChanged={onPhotosChanged}
-            dirty={dirty} saving={saving} onSave={onSave} onPushTree={pushTree} />
+            dirty={dirty} saving={saving} onSave={onSave}
+            onPushRight={pushRight} onPushLeft={pushLeft} canPushLeft={canPushLeft} />
         )}
       </div>
       {notificationsOpen && (
