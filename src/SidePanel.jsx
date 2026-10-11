@@ -31,8 +31,13 @@ export default function SidePanel({
       child: relativeGender === "m" ? "son" : "daughter",
       sibling: relativeGender === "m" ? "brother" : "sister",
       spouse: relativeGender === "m" ? "husband" : "wife",
+      twin: relativeGender === "m" ? "brother" : "sister",
+      divorcee: relativeGender === "m" ? "husband" : "wife",
     };
-    const err = onAdd(relationByType[relation], name, surname);
+    const err = onAdd(relationByType[relation], name, surname, {
+      twin: relation === "twin",
+      divorcee: relation === "divorcee",
+    });
     if (err) return setError(err);
     setName(""); setSurname(""); setError("");
     switchTab("details");
@@ -101,10 +106,24 @@ export default function SidePanel({
               <input type="date" value={edit.birthday} onChange={change("birthday")} />
             </label>
             <label>Gender
-              <select value={edit.gender} onChange={change("gender")}>
-                <option value="m">Male</option>
-                <option value="f">Female</option>
-              </select>
+              <div className="relationship-options" role="group" aria-label="Gender">
+                <div className="relationship-row">
+                  {[
+                    { value: "m", label: "Male" },
+                    { value: "f", label: "Female" },
+                  ].map((option) => (
+                    <button key={option.value} type="button"
+                      aria-pressed={edit.gender === option.value}
+                      className={edit.gender === option.value ? "choice selected" : "choice"}
+                      onClick={() => {
+                        setEdit({ ...edit, gender: option.value });
+                        setSaved(false);
+                      }}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </label>
             <label>Notes
               <textarea value={edit.notes} onChange={change("notes")}
@@ -128,6 +147,19 @@ export default function SidePanel({
                   aria-pressed={relativeGender === option.value}
                   className={relativeGender === option.value ? "choice selected" : "choice"}
                   onClick={() => setRelativeGender(option.value)}>
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <div className="relationship-row relationship-row-special" role="group" aria-label="Special relationship">
+              {[
+                { value: "twin", label: "Twin" },
+                { value: "divorcee", label: "Divorcee" },
+              ].map((option) => (
+                <button key={option.value} type="button"
+                  aria-pressed={relation === option.value}
+                  className={relation === option.value ? "choice selected" : "choice"}
+                  onClick={() => setRelation(option.value)}>
                   {option.label}
                 </button>
               ))}

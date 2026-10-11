@@ -12,14 +12,16 @@ export const RELATIONS = [
 
 const uid = () => "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 
-export function addRelative(data, personId, relation, name, surname) {
+export function addRelative(data, personId, relation, name, surname, options = {}) {
   if (!name.trim()) return { error: "Please enter a name." };
   const gender = ["son", "husband", "father", "brother"].includes(relation) ? "m" : "f";
   const np = { id: uid(), name: name.trim(), surname: surname.trim(), gender };
 
   const unions = data.unions.map((u) => ({
+    ...u,
     partners: [...u.partners],
     children: [...(u.children || [])],
+    ...(u.twinPairs && { twinPairs: u.twinPairs.map((pair) => [...pair]) }),
   }));
   const own = unions.find((u) => u.partners.includes(personId));
   const parentUnion = unions.find((u) => u.children.includes(personId));
@@ -31,8 +33,17 @@ export function addRelative(data, personId, relation, name, surname) {
   } else if (relation === "brother" || relation === "sister") {
     if (!parentUnion) return { error: "Add a parent first, then you can add siblings." };
     parentUnion.children.push(np.id);
+    if (options.twin) {
+      parentUnion.twinPairs = [...(parentUnion.twinPairs || []), [personId, np.id]];
+    }
   } else if (relation === "husband" || relation === "wife") {
-    if (own) {
+    if (options.divorcee) {
+      const selected = data.people.find((person) => person.id === personId);
+      const partners = [selected, np]
+        .sort((a, b) => (a.gender === "m" ? 0 : 1) - (b.gender === "m" ? 0 : 1))
+        .map((person) => person.id);
+      unions.push({ partners, children: [], divorced: true });
+    } else if (own) {
       if (own.partners.length > 1) return { error: "This person already has a partner." };
       own.partners.push(np.id);
       touched = own;
@@ -49,6 +60,7 @@ export function addRelative(data, personId, relation, name, surname) {
   if (touched) {
     const g = (id) => (id === np.id ? np : data.people.find((p) => p.id === id)).gender;
     touched.partners.sort((a, b) => (g(a) === "m" ? 0 : 1) - (g(b) === "m" ? 0 : 1));
+    if (options.divorcee) touched.divorced = true;
   }
   return { data: { ...data, people: [...data.people, np], unions }, newId: np.id };
 }
@@ -85,8 +97,12 @@ export function removePerson(data, id) {
 
   const unions = data.unions
     .map((u) => ({
+      ...u,
       partners: u.partners.filter((p) => p !== id),
       children: (u.children || []).filter((c) => c !== id),
+      ...(u.twinPairs && {
+        twinPairs: u.twinPairs.filter((pair) => !pair.includes(id)),
+      }),
     }))
     .filter((u) => u.partners.length > 0
       ? u.partners.length > 1 || u.children.length > 0

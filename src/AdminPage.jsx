@@ -26,8 +26,8 @@ export default function AdminPage({
     setFocus({ id }); // new object each time, so picking the same person again re-centres
   };
 
-  const add = (relation, name, surname) => {
-    const res = addRelative(data, selected, relation, name, surname);
+  const add = (relation, name, surname, relationshipOptions) => {
+    const res = addRelative(data, selected, relation, name, surname, relationshipOptions);
     if (res.error) return res.error;
     const addsParent = relation === "father" || relation === "mother";
     const addsChild = relation === "son" || relation === "daughter";

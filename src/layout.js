@@ -192,7 +192,18 @@ export function layoutTree({ people, unions }) {
     const parentY = partners.reduce((sum, position) => sum + position.y, 0) / partners.length;
     const coupleY = parentY + NH / 2;
     if (partners.length > 1) {
-      links.push(`M${partnerCenters[0] + NW / 2},${coupleY} H${partnerCenters[partners.length - 1] - NW / 2}`);
+      const left = partnerCenters[0] + NW / 2;
+      const right = partnerCenters[partners.length - 1] - NW / 2;
+      if (union.divorced) {
+        const midpoint = (left + right) / 2;
+        links.push(
+          `M${left},${coupleY} H${midpoint - 7} M${midpoint + 7},${coupleY} H${right}`
+          + ` M${midpoint - 5},${coupleY - 5} L${midpoint + 1},${coupleY + 5}`
+          + ` M${midpoint + 1},${coupleY - 5} L${midpoint + 7},${coupleY + 5}`
+        );
+      } else {
+        links.push(`M${left},${coupleY} H${right}`);
+      }
     }
     if (!children.length) return;
 
@@ -201,7 +212,31 @@ export function layoutTree({ people, unions }) {
     const busY = parentY + NH + (RH - NH) / 2;
     links.push(`M${parentCenter},${partners.length > 1 ? coupleY : parentY + NH} V${busY}`);
     links.push(`M${Math.min(parentCenter, ...childCenters)},${busY} H${Math.max(parentCenter, ...childCenters)}`);
-    children.forEach((child) => links.push(`M${child.x + NW / 2},${busY} V${child.y}`));
+    const childById = new Map((union.children || [])
+      .map((id) => [id, positions.get(id)])
+      .filter(([, position]) => position));
+    const twinFor = new Map();
+    (union.twinPairs || []).forEach(([first, second]) => {
+      twinFor.set(first, second);
+      twinFor.set(second, first);
+    });
+    const drawnTwins = new Set();
+    (union.children || []).forEach((childId) => {
+      const child = childById.get(childId);
+      if (!child) return;
+      const twinId = twinFor.get(childId);
+      const twin = childById.get(twinId);
+      if (!twin) {
+        links.push(`M${child.x + NW / 2},${busY} V${child.y}`);
+        return;
+      }
+      const key = [child.x, twin.x].sort((a, b) => a - b).join(":");
+      if (drawnTwins.has(key)) return;
+      drawnTwins.add(key);
+      const junction = (child.x + twin.x + NW) / 2;
+      links.push(`M${junction},${busY} L${child.x + NW / 2},${child.y}`);
+      links.push(`M${junction},${busY} L${twin.x + NW / 2},${twin.y}`);
+    });
   });
 
   const maxRight = nodes.reduce((right, node) => Math.max(right, node.x + NW), PAD);
