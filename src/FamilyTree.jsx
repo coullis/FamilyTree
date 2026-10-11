@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { layoutTree, NW, NH, GAP, CW, PAD } from "./layout";
 
 export default function FamilyTree({
@@ -7,9 +7,47 @@ export default function FamilyTree({
   const scroller = useRef(null);
   const canvas = useRef(null);
   const drag = useRef(null);
+  const pan = useRef(null);
+  const zoomRef = useRef(1);
+  const zoomAnchor = useRef(null);
+  const zoomToRef = useRef(null);
+  const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState(null);
   const { nodes, links, width, height } = useMemo(() => layoutTree(data), [data]);
   const canvasWidth = canReorder ? width + CW * 4 : width;
+  const zoomTo = useCallback((nextZoom, clientX, clientY) => {
+    const el = scroller.current;
+    if (!el) return;
+    const next = Math.max(0.4, Math.min(2.5, nextZoom));
+    if (next === zoomRef.current) return;
+
+    const bounds = el.getBoundingClientRect();
+    zoomAnchor.current = {
+      x: (clientX - bounds.left + el.scrollLeft) / zoomRef.current,
+      y: (clientY - bounds.top + el.scrollTop) / zoomRef.current,
+      offsetX: clientX - bounds.left,
+      offsetY: clientY - bounds.top,
+    };
+    zoomRef.current = next;
+    setZoom(next);
+  }, []);
+  const zoomAtCenter = (nextZoom) => {
+    const bounds = scroller.current?.getBoundingClientRect();
+    if (!bounds) return;
+    zoomTo(nextZoom, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+  };
+  useLayoutEffect(() => {
+    zoomToRef.current = zoomTo;
+  }, [zoomTo]);
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    const anchor = zoomAnchor.current;
+    if (!el || !anchor) return;
+    el.scrollLeft = anchor.x * zoom - anchor.offsetX;
+    el.scrollTop = anchor.y * zoom - anchor.offsetY;
+    zoomAnchor.current = null;
+  }, [zoom]);
+
   const slots = useMemo(() => {
     if (!canReorder) return [];
     const rows = [...new Set(nodes.map((node) => node.y))];
@@ -26,34 +64,60 @@ export default function FamilyTree({
     });
   }, [canReorder, canvasWidth, nodes]);
 
-  // mouse wheel scrolls sideways; dragging pans
+  // Wheel zooms toward the pointer; dragging the canvas pans in both directions.
   useEffect(() => {
     const el = scroller.current;
     const onWheel = (e) => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault();
-        el.scrollLeft += e.deltaY;
-      }
+      if (!e.deltaY) return;
+      e.preventDefault();
+      zoomToRef.current(
+        zoomRef.current * Math.exp(-e.deltaY * 0.001),
+        e.clientX,
+        e.clientY,
+      );
     };
-    let down = false, startX = 0, startLeft = 0;
     const onDown = (e) => {
+      if (e.button !== 0) return;
+      if (pan.current) {
+        pan.current.active = false;
+        pan.current.moved = false;
+      }
+      if (e.target.closest(".zoom-controls")) return;
       if (canReorder && e.target.closest(".person")) return;
-      down = true; startX = e.clientX; startLeft = el.scrollLeft;
+      pan.current = {
+        x: e.clientX,
+        y: e.clientY,
+        left: el.scrollLeft,
+        top: el.scrollTop,
+        moved: false,
+        active: true,
+      };
     };
     const onMove = (e) => {
-      if (!down) return;
-      el.scrollLeft = startLeft - (e.clientX - startX);
+      const active = pan.current;
+      if (!active?.active) return;
+      if (Math.abs(e.clientX - active.x) + Math.abs(e.clientY - active.y) > 3) {
+        active.moved = true;
+      }
+      if (!active.moved) return;
+      e.preventDefault();
+      el.scrollLeft = active.left - (e.clientX - active.x);
+      el.scrollTop = active.top - (e.clientY - active.y);
     };
-    const onUp = () => (down = false);
+    const onUp = () => {
+      if (pan.current) pan.current.active = false;
+    };
     el.addEventListener("wheel", onWheel, { passive: false });
     el.addEventListener("pointerdown", onDown);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     return () => {
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
   }, [canReorder]);
 
@@ -62,7 +126,7 @@ export default function FamilyTree({
       const active = drag.current;
       const surface = canvas.current;
       if (!active || !surface) return;
-      active.x = Math.max(0, event.clientX - surface.getBoundingClientRect().left - active.offsetX);
+      active.x = Math.max(0, (event.clientX - surface.getBoundingClientRect().left) / zoomRef.current - active.offsetX);
       if (Math.abs(active.x - active.startX) > 4) active.moved = true;
       if (active.moved) setDragging({ id: active.id, x: active.x });
     };
@@ -108,7 +172,7 @@ export default function FamilyTree({
     drag.current = {
       id: node.id,
       startX: node.x,
-      offsetX: event.clientX - canvasLeft - node.x,
+      offsetX: (event.clientX - canvasLeft) / zoomRef.current - node.x,
       x: node.x,
       moved: false,
     };
@@ -120,8 +184,8 @@ export default function FamilyTree({
     const el = scroller.current;
     if (!n) return;
     el.scrollTo({
-      left: n.x + NW / 2 - el.clientWidth / 2,
-      top: n.y + NH / 2 - el.clientHeight / 2,
+      left: (n.x + NW / 2) * zoomRef.current - el.clientWidth / 2,
+      top: (n.y + NH / 2) * zoomRef.current - el.clientHeight / 2,
       behavior: "smooth",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,34 +193,54 @@ export default function FamilyTree({
 
   return (
     <div className={`scroller ${canReorder ? "admin-tree" : ""}`} ref={scroller}>
-      <div className="canvas" ref={canvas} style={{ width: canvasWidth, height }}>
-        {slots.map((slot) => (
-          <div
-            key={`${slot.x}-${slot.y}`}
-            className="layout-slot"
-            style={{ left: slot.x, top: slot.y, width: NW, height: NH }}
-            aria-hidden="true"
-          />
-        ))}
-        <svg width={canvasWidth} height={height} className="lines">
-          {links.map((d, i) => <path key={i} d={d} />)}
-        </svg>
-        {nodes.map((n) => (
-          <button
-            key={n.id}
-            className={`person ${n.gender === "m" ? "male" : "female"} ${selectedId === n.id ? "selected" : ""} ${unsavedIds?.has(n.id) ? "unsaved" : ""} ${dragging?.id === n.id ? "dragging" : ""}`}
-            style={{ left: dragging?.id === n.id ? dragging.x : n.x, top: n.y, width: NW, height: NH }}
-            onPointerDown={(event) => startDrag(event, n)}
-            onClick={() => onSelect(n.id)}
-          >
-            <span className="first">{n.name}</span>
-            <span className="last">{n.surname}</span>
-            {badges?.[n.id] > 0 && (
-              <span className="badge" title="Comments and photos to review">{badges[n.id]}</span>
-            )}
-            {n.deceased && <span className="cross" aria-label="deceased">†</span>}
-          </button>
-        ))}
+      <div className="canvas" style={{ width: canvasWidth * zoom, height: height * zoom }}>
+        <div
+          className="tree-surface"
+          ref={canvas}
+          style={{ width: canvasWidth, height, transform: `scale(${zoom})` }}
+        >
+          {slots.map((slot) => (
+            <div
+              key={`${slot.x}-${slot.y}`}
+              className="layout-slot"
+              style={{ left: slot.x, top: slot.y, width: NW, height: NH }}
+              aria-hidden="true"
+            />
+          ))}
+          <svg width={canvasWidth} height={height} className="lines">
+            {links.map((d, i) => <path key={i} d={d} />)}
+          </svg>
+          {nodes.map((n) => (
+            <button
+              key={n.id}
+              className={`person ${n.gender === "m" ? "male" : "female"} ${selectedId === n.id ? "selected" : ""} ${unsavedIds?.has(n.id) ? "unsaved" : ""} ${dragging?.id === n.id ? "dragging" : ""}`}
+              style={{ left: dragging?.id === n.id ? dragging.x : n.x, top: n.y, width: NW, height: NH }}
+              onPointerDown={(event) => startDrag(event, n)}
+              onClick={(event) => {
+                if (pan.current?.moved) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  pan.current.moved = false;
+                  return;
+                }
+                onSelect(n.id);
+              }}
+            >
+              <span className="first">{n.name}</span>
+              <span className="last">{n.surname}</span>
+              {badges?.[n.id] > 0 && (
+                <span className="badge" title="Comments and photos to review">{badges[n.id]}</span>
+              )}
+              {n.deceased && <span className="cross" aria-label="deceased">†</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="zoom-controls" aria-label="Tree zoom controls">
+        <button type="button" aria-label="Zoom out" onClick={() => zoomAtCenter(zoom - 0.2)}>−</button>
+        <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+        <button type="button" aria-label="Zoom in" onClick={() => zoomAtCenter(zoom + 0.2)}>+</button>
+        <button type="button" aria-label="Reset zoom" onClick={() => zoomAtCenter(1)}>Reset</button>
       </div>
     </div>
   );

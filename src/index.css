@@ -13,9 +13,14 @@ header { padding: 28px 40px 0; display: flex; justify-content: space-between; al
 h1 { margin: 0; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; }
 header p { margin: 6px 0 0; color: #6b7487; font-size: 0.9rem; }
 
-.scroller { flex: 1; overflow-x: auto; overflow-y: auto; cursor: grab; }
+.scroller { position: relative; flex: 1; overflow: auto; cursor: grab; user-select: none; }
 .scroller:active { cursor: grabbing; }
 .canvas { position: relative; }
+.tree-surface { position: absolute; top: 0; left: 0; transform-origin: top left; }
+.zoom-controls { position: absolute; z-index: 4; top: 12px; right: 16px; display: flex; align-items: center; gap: 4px; padding: 5px; border: 1px solid #d5dae5; border-radius: 10px; background: #fff; box-shadow: 0 3px 12px rgba(29,36,51,.12); cursor: default; }
+.zoom-controls button { min-width: 30px; height: 30px; border: 0; border-radius: 7px; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.zoom-controls button:hover { background: #eef1f7; }
+.zoom-controls span { min-width: 42px; text-align: center; font-size: .8rem; color: #6b7487; }
 .lines { position: absolute; inset: 0; pointer-events: none; }
 .lines path { fill: none; stroke: var(--line); stroke-width: 2; stroke-linejoin: round; }
 
