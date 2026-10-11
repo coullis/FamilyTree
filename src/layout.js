@@ -218,11 +218,6 @@ export function layoutTree({ people, unions }) {
     }
     if (!children.length) return;
 
-    const childCenters = children.map((position) => position.x + NW / 2);
-    const parentCenter = partnerCenters.reduce((sum, center) => sum + center, 0) / partnerCenters.length;
-    const busY = parentY + NH + (RH - NH) / 2;
-    links.push(`M${parentCenter},${partners.length > 1 ? coupleY : parentY + NH} V${busY}`);
-    links.push(`M${Math.min(parentCenter, ...childCenters)},${busY} H${Math.max(parentCenter, ...childCenters)}`);
     const childById = new Map((union.children || [])
       .map((id) => [id, positions.get(id)])
       .filter(([, position]) => position));
@@ -231,6 +226,26 @@ export function layoutTree({ people, unions }) {
       twinFor.set(first, second);
       twinFor.set(second, first);
     });
+    const childBusAnchors = [];
+    const anchoredTwins = new Set();
+    (union.children || []).forEach((childId) => {
+      const child = childById.get(childId);
+      if (!child) return;
+      const twinId = twinFor.get(childId);
+      const twin = childById.get(twinId);
+      if (!twin) {
+        childBusAnchors.push(child.x + NW / 2);
+        return;
+      }
+      const key = [childId, twinId].sort().join(":");
+      if (anchoredTwins.has(key)) return;
+      anchoredTwins.add(key);
+      childBusAnchors.push((child.x + twin.x + NW) / 2);
+    });
+    const parentCenter = partnerCenters.reduce((sum, center) => sum + center, 0) / partnerCenters.length;
+    const busY = parentY + NH + (RH - NH) / 2;
+    links.push(`M${parentCenter},${partners.length > 1 ? coupleY : parentY + NH} V${busY}`);
+    links.push(`M${Math.min(parentCenter, ...childBusAnchors)},${busY} H${Math.max(parentCenter, ...childBusAnchors)}`);
     const drawnTwins = new Set();
     (union.children || []).forEach((childId) => {
       const child = childById.get(childId);
