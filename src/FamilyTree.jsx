@@ -3,6 +3,7 @@ import { layoutTree, NW, NH, GAP, CW, PAD } from "./layout";
 
 export default function FamilyTree({
   data, selectedId, onSelect, focus, badges, canReorder = false, unsavedIds, onReorder,
+  zoom, onZoomChange,
 }) {
   const scroller = useRef(null);
   const canvas = useRef(null);
@@ -11,7 +12,6 @@ export default function FamilyTree({
   const zoomRef = useRef(1);
   const zoomAnchor = useRef(null);
   const zoomToRef = useRef(null);
-  const [zoom, setZoom] = useState(1);
   const [dragging, setDragging] = useState(null);
   const { nodes, links, width, height } = useMemo(() => layoutTree(data), [data]);
   const canvasWidth = canReorder ? width + CW * 4 : width;
@@ -29,23 +29,28 @@ export default function FamilyTree({
       offsetY: clientY - bounds.top,
     };
     zoomRef.current = next;
-    setZoom(next);
-  }, []);
-  const zoomAtCenter = (nextZoom) => {
-    const bounds = scroller.current?.getBoundingClientRect();
-    if (!bounds) return;
-    zoomTo(nextZoom, bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
-  };
+    onZoomChange(next);
+  }, [onZoomChange]);
   useLayoutEffect(() => {
     zoomToRef.current = zoomTo;
   }, [zoomTo]);
   useLayoutEffect(() => {
     const el = scroller.current;
+    if (!el) return;
+    const previousZoom = zoomRef.current;
     const anchor = zoomAnchor.current;
-    if (!el || !anchor) return;
-    el.scrollLeft = anchor.x * zoom - anchor.offsetX;
-    el.scrollTop = anchor.y * zoom - anchor.offsetY;
-    zoomAnchor.current = null;
+    if (anchor) {
+      el.scrollLeft = anchor.x * zoom - anchor.offsetX;
+      el.scrollTop = anchor.y * zoom - anchor.offsetY;
+      zoomAnchor.current = null;
+    } else if (previousZoom !== zoom) {
+      const bounds = el.getBoundingClientRect();
+      const offsetX = bounds.width / 2;
+      const offsetY = bounds.height / 2;
+      el.scrollLeft = (el.scrollLeft + offsetX) * zoom / previousZoom - offsetX;
+      el.scrollTop = (el.scrollTop + offsetY) * zoom / previousZoom - offsetY;
+    }
+    zoomRef.current = zoom;
   }, [zoom]);
 
   const slots = useMemo(() => {
@@ -82,7 +87,6 @@ export default function FamilyTree({
         pan.current.active = false;
         pan.current.moved = false;
       }
-      if (e.target.closest(".zoom-controls")) return;
       if (canReorder && e.target.closest(".person")) return;
       pan.current = {
         x: e.clientX,
@@ -236,12 +240,17 @@ export default function FamilyTree({
           ))}
         </div>
       </div>
-      <div className="zoom-controls" aria-label="Tree zoom controls">
-        <button type="button" aria-label="Zoom out" onClick={() => zoomAtCenter(zoom - 0.2)}>−</button>
-        <span aria-live="polite">{Math.round(zoom * 100)}%</span>
-        <button type="button" aria-label="Zoom in" onClick={() => zoomAtCenter(zoom + 0.2)}>+</button>
-        <button type="button" aria-label="Reset zoom" onClick={() => zoomAtCenter(1)}>Reset</button>
-      </div>
+    </div>
+  );
+}
+
+export function ZoomControls({ zoom, onZoomChange }) {
+  return (
+    <div className="zoom-controls" aria-label="Tree zoom controls">
+      <button type="button" aria-label="Zoom out" onClick={() => onZoomChange(Math.max(0.4, zoom - 0.2))} disabled={zoom <= 0.4}>−</button>
+      <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+      <button type="button" aria-label="Zoom in" onClick={() => onZoomChange(Math.min(2.5, zoom + 0.2))} disabled={zoom >= 2.5}>+</button>
+      <button type="button" aria-label="Reset zoom" onClick={() => onZoomChange(1)} disabled={zoom === 1}>Reset</button>
     </div>
   );
 }

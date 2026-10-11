@@ -1,5 +1,5 @@
 import { useState } from "react";
-import FamilyTree from "./FamilyTree";
+import FamilyTree, { ZoomControls } from "./FamilyTree";
 import SidePanel from "./SidePanel";
 import SearchBar from "./SearchBar";
 import { addRelative, patchPerson, removePerson, updatePerson } from "./familyOps";
@@ -12,6 +12,7 @@ export default function AdminPage({
 }) {
   const [selected, setSelected] = useState(null);
   const [focus, setFocus] = useState(null);
+  const [zoom, setZoom] = useState(1);
 
   const person = data.people.find((p) => p.id === selected);
   const personComments = comments.filter((c) => c.personId === selected);
@@ -80,6 +81,50 @@ export default function AdminPage({
     });
   };
 
+  const pushTree = () => {
+    const layout = layoutTree(data);
+    const selectedNode = layout.nodes.find((node) => node.id === selected);
+    if (!selectedNode) return;
+
+    const selectedColumn = Math.round((selectedNode.x - PAD) / CW);
+    const nodeX = new Map(layout.nodes.map((node) => [node.id, node.x]));
+    const parent = new Map(data.people.map((member) => [member.id, member.id]));
+    const find = (id) => {
+      const root = parent.get(id);
+      if (root === undefined || root === id) return root;
+      const representative = find(root);
+      parent.set(id, representative);
+      return representative;
+    };
+    data.unions.forEach((union) => {
+      const partners = union.partners.filter((id) => parent.has(id));
+      partners.slice(1).forEach((id) => parent.set(find(id), find(partners[0])));
+    });
+
+    const groupLeft = new Map();
+    layout.nodes.forEach((node) => {
+      const root = find(node.id);
+      groupLeft.set(root, Math.min(groupLeft.get(root) ?? Infinity, node.x));
+    });
+    const shiftedGroups = new Set(
+      [...groupLeft]
+        .filter(([, x]) => Math.round((x - PAD) / CW) > selectedColumn)
+        .map(([root]) => root)
+    );
+
+    setData((current) => ({
+      ...current,
+      people: current.people.map((member) => {
+        const x = nodeX.get(member.id);
+        if (!Number.isFinite(x)) return member;
+        return {
+          ...member,
+          layoutX: x + (shiftedGroups.has(find(member.id)) ? CW : 0),
+        };
+      }),
+    }));
+  };
+
   const remove = () => {
     const previousLayout = layoutTree(data);
     const res = removePerson(data, selected);
@@ -144,6 +189,7 @@ export default function AdminPage({
           <p>Drag people along their row to adjust spacing. Click a person to edit details, add relatives, read comments or remove them.</p>
         </div>
         <div className="actions">
+          <ZoomControls zoom={zoom} onZoomChange={setZoom} />
           <button onClick={download}>Download JSON</button>
           <button onClick={onMainPage}>Main Page</button>
           <button onClick={logout}>Log out</button>
@@ -151,12 +197,12 @@ export default function AdminPage({
       </header>
       <div className="main">
         <FamilyTree data={data} selectedId={selected} onSelect={setSelected} focus={focus} badges={badges}
-          canReorder onReorder={reorder} unsavedIds={unsavedIds} />
+          canReorder onReorder={reorder} unsavedIds={unsavedIds} zoom={zoom} onZoomChange={setZoom} />
         {person && (
           <SidePanel key={person.id} person={person} comments={personComments}
             onClose={() => setSelected(null)} onAdd={add} onUpdate={update}
             onPatch={patch} onRemove={remove} onDeleteComment={onDeleteComment} onPhotosChanged={onPhotosChanged}
-            dirty={dirty} saving={saving} onSave={onSave} />
+            dirty={dirty} saving={saving} onSave={onSave} onPushTree={pushTree} />
         )}
       </div>
       <SearchBar people={data.people} onPick={pick} />

@@ -3,7 +3,7 @@ import PhotoGallery from "./PhotoGallery";
 
 export default function SidePanel({
   person, onClose, onAdd, onUpdate, onPatch, onRemove, comments, onDeleteComment, onPhotosChanged,
-  dirty, saving, onSave,
+  dirty, saving, onSave, onPushTree,
 }) {
   const [tab, setTab] = useState("details"); // "details" | "add"
   // add-relationship form
@@ -177,6 +177,11 @@ export default function SidePanel({
 
       {error && <p className="error">{error}</p>}
       {saved && <p className="saved">Saved</p>}
+      {onPushTree && (
+        <button className="primary push-tree" type="button" onClick={onPushTree}>
+          Push tree
+        </button>
+      )}
       <button className="primary" type={tab === "details" ? "submit" : "button"}
         form={tab === "details" ? "person-edit" : undefined}
         onClick={tab === "details" ? undefined : saveChanges}
