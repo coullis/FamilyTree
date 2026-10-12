@@ -107,14 +107,17 @@ export default function AdminPage({
     if (res.error) return res.error;
     const addsParent = relation === "father" || relation === "mother";
     const addsChild = relation === "son" || relation === "daughter";
+    const addsSibling = relation === "brother" || relation === "sister";
     const hasParents = data.unions.some((union) => union.children.includes(selected));
     let updatedData = res.data;
-    if (res.newId && (addsChild || (addsParent && !hasParents))) {
+    if (res.newId && (addsChild || addsSibling || (addsParent && !hasParents))) {
       const layout = layoutTree(data);
       const selectedNode = layout.nodes.find((node) => node.id === selected);
       if (selectedNode) {
         const createsTopRow = addsParent && selectedNode.y === PAD;
-        const targetY = selectedNode.y + (addsParent && !createsTopRow ? -RH : RH);
+        const targetY = addsSibling
+          ? selectedNode.y
+          : selectedNode.y + (addsParent && !createsTopRow ? -RH : RH);
         const occupied = createsTopRow ? [] : layout.nodes.filter((node) => node.y === targetY);
         const maxX = Math.max(layout.width + CW * 4, selectedNode.x + CW * 4);
         const layoutX = closestOpenX(occupied, selectedNode.x, maxX);
