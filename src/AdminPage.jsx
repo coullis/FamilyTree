@@ -2,7 +2,7 @@ import { useState } from "react";
 import FamilyTree, { ZoomControls } from "./FamilyTree";
 import SidePanel from "./SidePanel";
 import SearchBar from "./SearchBar";
-import { addRelative, patchPerson, removePerson, updatePerson } from "./familyOps";
+import { addRelative, patchPerson, positionPartner, removePerson, updatePerson } from "./familyOps";
 import { CW, GAP, NW, PAD, RH, closestOpenX, layoutTree } from "./layout";
 import { deletePersonPhotos } from "./lib/photos";
 
@@ -108,9 +108,12 @@ export default function AdminPage({
     const addsParent = relation === "father" || relation === "mother";
     const addsChild = relation === "son" || relation === "daughter";
     const addsSibling = relation === "brother" || relation === "sister";
+    const addsPartner = relation === "husband" || relation === "wife";
     const hasParents = data.unions.some((union) => union.children.includes(selected));
     let updatedData = res.data;
-    if (res.newId && (addsChild || addsSibling || (addsParent && !hasParents))) {
+    if (res.newId && addsPartner) {
+      updatedData = positionPartner(data, res.data, layoutTree(data), selected, res.newId);
+    } else if (res.newId && (addsChild || addsSibling || (addsParent && !hasParents))) {
       const layout = layoutTree(data);
       const selectedNode = layout.nodes.find((node) => node.id === selected);
       if (selectedNode) {

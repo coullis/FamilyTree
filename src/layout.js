@@ -49,7 +49,12 @@ export function layoutTree({ people, unions }) {
 
   const units = [...groups.values()].map((members) => ({
     members: (() => {
-      const ordered = members.slice();
+      const ordered = members.slice().sort((a, b) => {
+        const firstOrder = people[personIndex.get(a)].layoutOrder;
+        const secondOrder = people[personIndex.get(b)].layoutOrder;
+        return (Number.isFinite(firstOrder) ? firstOrder : personIndex.get(a))
+          - (Number.isFinite(secondOrder) ? secondOrder : personIndex.get(b));
+      });
       unions.forEach((union) => {
         const partnerOrder = (union.partnerOrder || []).filter((id) => ordered.includes(id));
         if (partnerOrder.length < 2) return;

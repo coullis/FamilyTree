@@ -43,11 +43,23 @@ export function addRelative(data, personId, relation, name, surname, options = {
         .sort((a, b) => (a.gender === "m" ? 0 : 1) - (b.gender === "m" ? 0 : 1))
         .map((person) => person.id);
       unions.push({ partners, children: [], divorced: true });
-    } else if (own) {
-      if (own.partners.length > 1) return { error: "This person already has a partner." };
-      own.partners.push(np.id);
-      touched = own;
-    } else unions.push({ partners: [personId, np.id], children: [] });
+    } else {
+      const currentUnion = unions.find((union) =>
+        union.partners.includes(personId) && !union.divorced
+      );
+      if (currentUnion) {
+        if (currentUnion.partners.length > 1) return { error: "This person already has a partner." };
+        currentUnion.partners.push(np.id);
+        currentUnion.partnerOrder = [np.id, personId];
+        touched = currentUnion;
+      } else {
+        unions.push({
+          partners: [personId, np.id],
+          partnerOrder: [np.id, personId],
+          children: [],
+        });
+      }
+    }
   } else {
     if (parentUnion) {
       if (parentUnion.partners.length > 1) return { error: "This person already has both parents." };
@@ -63,6 +75,61 @@ export function addRelative(data, personId, relation, name, surname, options = {
     if (options.divorcee) touched.divorced = true;
   }
   return { data: { ...data, people: [...data.people, np], unions }, newId: np.id };
+}
+
+export function positionPartner(previousData, updatedData, layout, selected, newId) {
+  const nodes = new Map(layout.nodes.map((node) => [node.id, node]));
+  const selectedNode = nodes.get(selected);
+  if (!selectedNode) return updatedData;
+
+  const existingPartnerIds = new Set(previousData.unions
+    .filter((union) => union.partners.includes(selected))
+    .flatMap((union) => union.partners.filter((id) => id !== selected)));
+  const existingPartners = [...existingPartnerIds]
+    .map((id) => nodes.get(id))
+    .filter(Boolean);
+  const leftCount = existingPartners.filter((node) => node.x < selectedNode.x).length;
+  const rightCount = existingPartners.length - leftCount;
+  const side = !leftCount ? "left" : !rightCount ? "right"
+    : leftCount <= rightCount ? "left" : "right";
+
+  const partnerGroup = new Set([selected]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    previousData.unions.forEach((union) => {
+      if (!union.partners.some((id) => partnerGroup.has(id))) return;
+      union.partners.forEach((id) => {
+        if (!partnerGroup.has(id)) {
+          partnerGroup.add(id);
+          changed = true;
+        }
+      });
+    });
+  }
+
+  const ordered = [...partnerGroup].sort((a, b) =>
+    (nodes.get(a)?.x ?? Infinity) - (nodes.get(b)?.x ?? Infinity)
+  );
+  const selectedIndex = ordered.indexOf(selected);
+  ordered.splice(selectedIndex + (side === "right" ? 1 : 0), 0, newId);
+  const orderById = new Map(ordered.map((id, index) => [id, index]));
+  const baseOrder = Math.min(...ordered.map((id) =>
+    updatedData.people.findIndex((person) => person.id === id)
+  ));
+  const people = updatedData.people.map((person) =>
+    orderById.has(person.id)
+      ? { ...person, layoutOrder: baseOrder + orderById.get(person.id) / ordered.length }
+      : person
+  );
+  const unions = updatedData.unions.map((union) => {
+    if (!union.partners.some((id) => orderById.has(id))) return union;
+    return {
+      ...union,
+      partnerOrder: [...union.partners].sort((a, b) => orderById.get(a) - orderById.get(b)),
+    };
+  });
+  return { ...updatedData, people, unions };
 }
 
 export function getRelatives(data, id) {
