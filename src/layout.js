@@ -20,6 +20,36 @@ export function closestOpenX(nodes, anchorX, maxX) {
     : anchorX;
 }
 
+function separateHorizontalRoutes(routes) {
+  const offsets = new Map();
+  const remaining = new Set(routes);
+  while (remaining.size) {
+    const component = [];
+    const queue = [remaining.values().next().value];
+    remaining.delete(queue[0]);
+    while (queue.length) {
+      const route = queue.pop();
+      component.push(route);
+      for (const candidate of remaining) {
+        if (Math.abs(route.y - candidate.y) < 10
+          && route.left < candidate.right && route.right > candidate.left) {
+          remaining.delete(candidate);
+          queue.push(candidate);
+        }
+      }
+    }
+    if (component.length < 2) continue;
+    component.sort((a, b) => a.y - b.y || a.left - b.left || a.index - b.index);
+    const middle = (component.length - 1) / 2;
+    component.forEach((route, index) => {
+      const distance = Math.ceil(Math.abs(index - middle));
+      const direction = Math.sign(index - middle);
+      offsets.set(route.id, direction * distance * 10);
+    });
+  }
+  return offsets;
+}
+
 export function layoutTree({ people, unions }) {
   const personIndex = new Map(people.map((person, index) => [person.id, index]));
   const parent = new Map(people.map((person) => [person.id, person.id]));
@@ -199,30 +229,14 @@ export function layoutTree({ people, unions }) {
     .map((person) => ({ ...person, ...positions.get(person.id) }));
   const links = [];
 
-  unions.forEach((union) => {
+  const unionLayouts = unions.map((union, index) => {
     const partners = union.partners.map((id) => positions.get(id)).filter(Boolean);
     const children = (union.children || []).map((id) => positions.get(id)).filter(Boolean);
-    if (!partners.length) return;
+    if (!partners.length) return { union, partners, children, routes: [] };
 
     const partnerCenters = partners.map((position) => position.x + NW / 2);
     const parentY = partners.reduce((sum, position) => sum + position.y, 0) / partners.length;
-    const coupleY = parentY + NH / 2;
-    if (partners.length > 1) {
-      const left = partnerCenters[0] + NW / 2;
-      const right = partnerCenters[partners.length - 1] - NW / 2;
-      if (union.divorced) {
-        const midpoint = (left + right) / 2;
-        links.push(
-          `M${left},${coupleY} H${midpoint - 7} M${midpoint + 7},${coupleY} H${right}`
-          + ` M${midpoint - 5},${coupleY - 5} L${midpoint + 1},${coupleY + 5}`
-          + ` M${midpoint + 1},${coupleY - 5} L${midpoint + 7},${coupleY + 5}`
-        );
-      } else {
-        links.push(`M${left},${coupleY} H${right}`);
-      }
-    }
-    if (!children.length) return;
-
+    const parentCenter = partnerCenters.reduce((sum, center) => sum + center, 0) / partnerCenters.length;
     const childById = new Map((union.children || [])
       .map((id) => [id, positions.get(id)])
       .filter(([, position]) => position));
@@ -247,8 +261,60 @@ export function layoutTree({ people, unions }) {
       anchoredTwins.add(key);
       childBusAnchors.push((child.x + twin.x + NW) / 2);
     });
-    const parentCenter = partnerCenters.reduce((sum, center) => sum + center, 0) / partnerCenters.length;
+
+    const coupleY = parentY + NH / 2;
     const busY = parentY + NH + (RH - NH) / 2;
+    const routes = [];
+    if (partners.length > 1) {
+      routes.push({
+        id: `${index}:couple`,
+        index,
+        y: coupleY,
+        left: partnerCenters[0] + NW / 2,
+        right: partnerCenters[partnerCenters.length - 1] - NW / 2,
+      });
+    }
+    if (children.length && childBusAnchors.length) {
+      routes.push({
+        id: `${index}:bus`,
+        index,
+        y: busY,
+        left: Math.min(parentCenter, ...childBusAnchors),
+        right: Math.max(parentCenter, ...childBusAnchors),
+      });
+    }
+    return {
+      union, partners, children, partnerCenters, parentY, parentCenter,
+      coupleY, busY, childById, twinFor, childBusAnchors, routes,
+    };
+  });
+  const routeOffsets = separateHorizontalRoutes(unionLayouts.flatMap((layout) => layout.routes));
+
+  unionLayouts.forEach((layout, index) => {
+    if (!layout.partners.length) return;
+    const {
+      union, partners, children, partnerCenters, parentY, parentCenter,
+      childById, twinFor, childBusAnchors,
+    } = layout;
+
+    const coupleY = layout.coupleY + (routeOffsets.get(`${index}:couple`) || 0);
+    if (partners.length > 1) {
+      const left = partnerCenters[0] + NW / 2;
+      const right = partnerCenters[partners.length - 1] - NW / 2;
+      if (union.divorced) {
+        const midpoint = (left + right) / 2;
+        links.push(
+          `M${left},${coupleY} H${midpoint - 7} M${midpoint + 7},${coupleY} H${right}`
+          + ` M${midpoint - 5},${coupleY - 5} L${midpoint + 1},${coupleY + 5}`
+          + ` M${midpoint + 1},${coupleY - 5} L${midpoint + 7},${coupleY + 5}`
+        );
+      } else {
+        links.push(`M${left},${coupleY} H${right}`);
+      }
+    }
+    if (!children.length) return;
+
+    const busY = layout.busY + (routeOffsets.get(`${index}:bus`) || 0);
     links.push(`M${parentCenter},${partners.length > 1 ? coupleY : parentY + NH} V${busY}`);
     links.push(`M${Math.min(parentCenter, ...childBusAnchors)},${busY} H${Math.max(parentCenter, ...childBusAnchors)}`);
     const drawnTwins = new Set();
