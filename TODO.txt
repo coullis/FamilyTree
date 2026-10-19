@@ -1,3 +1,2 @@
-Add Cancel Changes option
 Hide non blood related people
 Show relation function

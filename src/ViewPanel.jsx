@@ -3,7 +3,6 @@ import PhotoGallery from "./PhotoGallery";
 
 // Read-only panel for visitors: details, photos, and a form to send a comment to the admin.
 export default function ViewPanel({ person, onClose, onComment }) {
-  const [author, setAuthor] = useState("");
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
@@ -11,9 +10,9 @@ export default function ViewPanel({ person, onClose, onComment }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!author.trim() || !text.trim()) return setError("Please enter your name and a comment.");
+    if (!text.trim()) return setError("Please enter a comment.");
     setBusy(true);
-    const err = await onComment(author.trim(), text.trim());
+    const err = await onComment("Anonymous", text.trim());
     setBusy(false);
     if (err) return setError(err);
     setText(""); setError(""); setSent(true);
@@ -34,11 +33,7 @@ export default function ViewPanel({ person, onClose, onComment }) {
       {person.deceased && <span className="born">† Deceased</span>}
       {person.notes && <p className="notes">{person.notes}</p>}
 
-      <label className="from">Your name <span className="muted">(for photos and comments)</span>
-        <input value={author} onChange={(e) => { setAuthor(e.target.value); setSent(false); }} />
-      </label>
-
-      <PhotoGallery personId={person.id} admin={false} uploader={author} />
+      <PhotoGallery personId={person.id} admin={false} />
 
       <form onSubmit={submit}>
         <h3>Leave a comment</h3>

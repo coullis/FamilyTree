@@ -130,7 +130,7 @@ export default function SidePanel({
                 placeholder="Write something about this person…" />
             </label>
           </form>
-          <PhotoGallery personId={person.id} admin uploader="Admin" onChanged={onPhotosChanged} />
+          <PhotoGallery personId={person.id} admin onChanged={onPhotosChanged} />
         </>
       )}
 

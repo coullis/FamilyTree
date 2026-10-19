@@ -3,7 +3,7 @@ import Lightbox from "./Lightbox";
 import { approvePhoto, deletePhoto, photoUrl, uploadPhoto, usePhotos } from "./lib/photos";
 
 // Thumbnails + "Add photo". Visitors' uploads wait for approval; the admin's go live at once.
-export default function PhotoGallery({ personId, admin, uploader, onChanged }) {
+export default function PhotoGallery({ personId, admin, onChanged }) {
   const { photos, reload } = usePhotos(personId, !admin);
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -14,7 +14,6 @@ export default function PhotoGallery({ personId, admin, uploader, onChanged }) {
   const changed = () => { reload(); onChanged?.(); };
 
   const pick = () => {
-    if (!admin && !uploader.trim()) return setError("Please enter your name first.");
     setError(""); setMsg("");
     input.current.click();
   };
@@ -27,7 +26,7 @@ export default function PhotoGallery({ personId, admin, uploader, onChanged }) {
     try {
       for (const file of files)
         await uploadPhoto({
-          personId, file, approved: admin, uploader: admin ? "Admin" : uploader.trim(),
+          personId, file, approved: admin, uploader: admin ? "Admin" : "Anonymous",
         });
       if (!admin) setMsg("Thank you! Your photo will appear once the admin approves it.");
       changed();
