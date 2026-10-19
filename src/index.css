@@ -195,6 +195,11 @@ header p {
   opacity: .85;
 }
 
+.birthday {
+  font-size: .68rem;
+  opacity: .85;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .person {
     transition: none;
@@ -739,6 +744,17 @@ form textarea {
   text-align: left;
   cursor: pointer;
   color: var(--ink);
+}
+
+.result-person {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.result-person small {
+  color: #6b7487;
+  font-size: .72rem;
 }
 
 .results button:hover {

@@ -10,9 +10,14 @@ export default function SearchBar({ people, onPick }) {
   const results = words.length
     ? people
         .filter((p) => {
-          const full = norm(`${p.name} ${p.surname}`);
-          return words.every((w) => full.includes(w));
-        })
+        const birthday = p.birthday
+          ? `${p.birthday} ${new Date(`${p.birthday}T00:00`).toLocaleDateString(undefined, {
+            day: "numeric", month: "short", year: "numeric",
+          })}`
+          : "";
+        const full = norm(`${p.name} ${p.surname} ${birthday}`);
+        return words.every((w) => full.includes(w));
+      })
         .slice(0, 6)
     : [];
 
@@ -31,7 +36,16 @@ export default function SearchBar({ people, onPick }) {
               <li key={p.id}>
                 <button onClick={() => pick(p.id)}>
                   <span className={`dot ${p.gender === "m" ? "male" : "female"}`} />
-                  {p.name} {p.surname}
+                  <span className="result-person">
+                    <span>{p.name} {p.surname}</span>
+                    {p.birthday && (
+                      <small>
+                        {new Date(`${p.birthday}T00:00`).toLocaleDateString(undefined, {
+                          day: "numeric", month: "short", year: "numeric",
+                        })}
+                      </small>
+                    )}
+                  </span>
                 </button>
               </li>
             ))

@@ -323,6 +323,13 @@ export default function FamilyTree({
             >
               <span className="first">{n.name}</span>
               <span className="last">{n.surname}</span>
+              {n.birthday && (
+                <span className="birthday">
+                  {new Date(`${n.birthday}T00:00`).toLocaleDateString(undefined, {
+                    day: "numeric", month: "short", year: "numeric",
+                  })}
+                </span>
+              )}
               {badges?.[n.id] > 0 && (
                 <span className="badge" title="Comments and photos to review">{badges[n.id]}</span>
               )}

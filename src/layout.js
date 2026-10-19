@@ -1,6 +1,6 @@
 // Generation numbers increase toward ancestors and decrease toward descendants.
 export const NW = 168;
-export const NH = 48;
+export const NH = 64;
 export const GAP = 40;
 export const CW = NW + GAP;
 export const RH = 130;
