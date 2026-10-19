@@ -122,6 +122,11 @@ header p {
   stroke-linejoin: round;
 }
 
+.lines path.related {
+  stroke: #fcad03;
+  stroke-width: 4;
+}
+
 .person {
   position: absolute;
   border: 0;

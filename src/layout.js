@@ -296,6 +296,7 @@ export function layoutTree({ people, unions }) {
       union, partners, children, partnerCenters, parentY, parentCenter,
       childById, twinFor, childBusAnchors,
     } = layout;
+    const addLink = (d, family = false) => links.push({ d, unionIndex: index, family });
 
     const coupleY = layout.coupleY + (routeOffsets.get(`${index}:couple`) || 0);
     if (partners.length > 1) {
@@ -303,20 +304,20 @@ export function layoutTree({ people, unions }) {
       const right = partnerCenters[partners.length - 1] - NW / 2;
       if (union.divorced) {
         const midpoint = (left + right) / 2;
-        links.push(
+        addLink(
           `M${left},${coupleY} H${midpoint - 7} M${midpoint + 7},${coupleY} H${right}`
           + ` M${midpoint - 5},${coupleY - 5} L${midpoint + 1},${coupleY + 5}`
           + ` M${midpoint + 1},${coupleY - 5} L${midpoint + 7},${coupleY + 5}`
         );
       } else {
-        links.push(`M${left},${coupleY} H${right}`);
+        addLink(`M${left},${coupleY} H${right}`);
       }
     }
     if (!children.length) return;
 
     const busY = layout.busY + (routeOffsets.get(`${index}:bus`) || 0);
-    links.push(`M${parentCenter},${partners.length > 1 ? coupleY : parentY + NH} V${busY}`);
-    links.push(`M${Math.min(parentCenter, ...childBusAnchors)},${busY} H${Math.max(parentCenter, ...childBusAnchors)}`);
+    addLink(`M${parentCenter},${partners.length > 1 ? coupleY : parentY + NH} V${busY}`, true);
+    addLink(`M${Math.min(parentCenter, ...childBusAnchors)},${busY} H${Math.max(parentCenter, ...childBusAnchors)}`, true);
     const drawnTwins = new Set();
     (union.children || []).forEach((childId) => {
       const child = childById.get(childId);
@@ -324,15 +325,15 @@ export function layoutTree({ people, unions }) {
       const twinId = twinFor.get(childId);
       const twin = childById.get(twinId);
       if (!twin) {
-        links.push(`M${child.x + NW / 2},${busY} V${child.y}`);
+        addLink(`M${child.x + NW / 2},${busY} V${child.y}`, true);
         return;
       }
       const key = [child.x, twin.x].sort((a, b) => a - b).join(":");
       if (drawnTwins.has(key)) return;
       drawnTwins.add(key);
       const junction = (child.x + twin.x + NW) / 2;
-      links.push(`M${junction},${busY} L${child.x + NW / 2},${child.y}`);
-      links.push(`M${junction},${busY} L${twin.x + NW / 2},${twin.y}`);
+      addLink(`M${junction},${busY} L${child.x + NW / 2},${child.y}`, true);
+      addLink(`M${junction},${busY} L${twin.x + NW / 2},${twin.y}`, true);
     });
   });
 

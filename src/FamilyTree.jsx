@@ -295,7 +295,14 @@ export default function FamilyTree({
             />
           ))}
           <svg width={canvasWidth} height={height} className="lines">
-            {links.map((d, i) => <path key={i} d={d} />)}
+            {links.map(({ d, unionIndex, family }, i) => {
+              const union = data.unions[unionIndex];
+              const related = selectedId && (
+                union.partners.includes(selectedId)
+                || (family && (union.children || []).includes(selectedId))
+              );
+              return <path key={i} className={related ? "related" : ""} d={d} />;
+            })}
           </svg>
           {nodes.map((n) => (
             <button
