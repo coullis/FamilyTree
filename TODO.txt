@@ -1,2 +1,4 @@
 Add Cancel Changes option
 Hide non blood related people
+Colour code lines
+Show relation function

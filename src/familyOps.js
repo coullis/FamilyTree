@@ -44,21 +44,11 @@ export function addRelative(data, personId, relation, name, surname, options = {
         .map((person) => person.id);
       unions.push({ partners, children: [], divorced: true });
     } else {
-      const currentUnion = unions.find((union) =>
-        union.partners.includes(personId) && !union.divorced
-      );
-      if (currentUnion) {
-        if (currentUnion.partners.length > 1) return { error: "This person already has a partner." };
-        currentUnion.partners.push(np.id);
-        currentUnion.partnerOrder = [np.id, personId];
-        touched = currentUnion;
-      } else {
-        unions.push({
-          partners: [personId, np.id],
-          partnerOrder: [np.id, personId],
-          children: [],
-        });
-      }
+      const selected = data.people.find((person) => person.id === personId);
+      const partners = [selected, np]
+        .sort((a, b) => (a.gender === "m" ? 0 : 1) - (b.gender === "m" ? 0 : 1))
+        .map((person) => person.id);
+      unions.push({ partners, partnerOrder: partners.slice(), children: [] });
     }
   } else {
     if (parentUnion) {
